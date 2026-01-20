@@ -3,14 +3,12 @@ const { pool } = require('../config/database');
 // Get all members with pagination, search, and filter
 const getAllMembers = async (req, res) => {
   try {
-    const {
-      page = 1,
-      limit = 10,
-      search = '',
-      specialty = '',
-      status = '',
-      membershipType = ''
-    } = req.query;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const search = req.query.search || '';
+    const specialty = req.query.specialty || '';
+    const status = req.query.status || '';
+    const membershipType = req.query.membershipType || '';
 
     const offset = (page - 1) * limit;
 
@@ -58,7 +56,7 @@ const getAllMembers = async (req, res) => {
       LIMIT ? OFFSET ?
     `;
 
-    const [members] = await pool.execute(membersQuery, [...queryParams, parseInt(limit), parseInt(offset)]);
+    const [members] = await pool.execute(membersQuery, [...queryParams, limit, offset]);
 
     res.json({
       members,
