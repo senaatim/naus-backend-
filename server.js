@@ -11,7 +11,7 @@ const multer = require('multer');
 const morgan = require('morgan');
 
 // Database and Models
-const { sequelize } = require('./models'); // Assuming models/index.js exports sequelize
+const { sequelize } = require('./models');
 const { connectDB } = require('./config/database');
 const createTables = require('./config/createTables');
 
@@ -22,181 +22,167 @@ const initializeDatabase = async () => {
   try {
     await connectDB();
     console.log('✅ Database connected successfully');
-    
+
     // Create tables if they don't exist
     await createTables();
-    
-    // Sync Sequelize Models (Syncs the 'admins', 'applications', and 'members' tables)
-    await sequelize.sync({ alter: false }); 
-    console.log('✅ Sequelize models synchronized');
+
+    // Sync Sequelize Models
+    await sequelize.sync({ alter: false });
+    console.log('✅ Sequelize models synced');
+
   } catch (error) {
     console.error('❌ Database initialization failed:', error);
-    process.exit(1);
   }
 };
 
+// Initialize database
 initializeDatabase();
 
 /* =========================
-   EXPRESS APP
+   EXPRESS APP SETUP
 ========================= */
 const app = express();
 
-/* ✅ FIX FOR express-rate-limit
-   REQUIRED when X-Forwarded-For exists (e.g., behind a proxy) */
-app.set('trust proxy', 1);
-
 /* =========================
-   SECURITY & LOGGING
+   MIDDLEWARE
 ========================= */
-// Updated Helmet config to allow Cross-Origin resource sharing for uploaded files
+// Logging
+app.use(morgan('dev'));
+
+// Security
 app.use(helmet({
-  crossOriginResourcePolicy: false, 
+  crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
 
-app.use(morgan('dev')); // Logging requests to console
+// Rate limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100 // limit each IP to 100 requests per windowMs
+});
+app.use(limiter);
 
-/* =========================
-   CORS CONFIG
-========================= */
-// Build allowed origins list
+// CORS Configuration
 const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:3001',
-  'http://127.0.0.1:3000',
-  'http://127.0.0.1:3001',
-  'http://127.0.0.1:5000',
-  'http://127.0.0.1:5500', // Live Server
-  'http://localhost:5500',
+  'https://nausurology.org',
+  'https://www.nausurology.org',
+  'https://admin.nausurology.org',
+  'https://cms.nausurology.org'
 ];
 
-// Add custom origins from environment variable (for ngrok, production, etc.)
 if (process.env.ALLOWED_ORIGINS) {
   const customOrigins = process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim());
   allowedOrigins.push(...customOrigins);
 }
 
-// CORS configuration
-const corsOptions = {
-  origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps, curl, Postman)
+app.use(cors({
+  origin: function(origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl)
     if (!origin) return callback(null, true);
 
-    // In development, allow all ngrok URLs
-    if (process.env.NODE_ENV === 'development' && origin.includes('.ngrok')) {
-      return callback(null, true);
-    }
-
-    // Check if origin is in allowed list
     if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else if (process.env.NODE_ENV === 'development' && origin.includes('.ngrok')) {
       callback(null, true);
     } else {
       console.log('Blocked by CORS:', origin);
-      callback(new Error('Not allowed by CORS'));
+      callback(null, true); // Allow all in production for now
     }
   },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
-};
+  credentials: true
+}));
 
-app.use(cors(corsOptions));
+// Body parsing
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-/* =========================
-   BODY PARSERS
-========================= */
-// Standard JSON parser
-app.use(express.json({ limit: '10mb' }));
-// URL-encoded parser for form submissions
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+// Static files for uploads
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 /* =========================
-   RATE LIMITING (GLOBAL)
+   FILE UPLOAD CONFIGURATION
 ========================= */
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 500, // Increased limit for development/admin dashboard usage
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: 'Too many requests from this IP, please try again after 15 minutes'
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, 'uploads/');
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + path.extname(file.originalname));
+  }
 });
 
-app.use('/api/', limiter);
-
-/* =========================
-   STATIC FILES
-========================= */
-// Serves documents from the 'uploads' folder (MBBS/Fellowship certificates)
-// Enhanced configuration to properly serve PDFs and images
-app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
-  setHeaders: (res, filePath) => {
-    if (filePath.endsWith('.pdf')) {
-      res.setHeader('Content-Type', 'application/pdf');
-    } else if (filePath.endsWith('.jpg') || filePath.endsWith('.jpeg') || filePath.endsWith('.png')) {
-      res.setHeader('Content-Type', 'image/' + path.extname(filePath).slice(1));
-    } else if (filePath.endsWith('.doc')) {
-      res.setHeader('Content-Type', 'application/msword');
-    } else if (filePath.endsWith('.docx')) {
-      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+const upload = multer({
+  storage: storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = /jpeg|jpg|png|pdf/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedTypes.test(file.mimetype);
+    if (extname && mimetype) {
+      return cb(null, true);
     }
+    cb(new Error('Only images (JPEG, PNG) and PDFs are allowed'));
   }
-}));
+});
 
 /* =========================
    ROUTES
 ========================= */
-// Load the route files
-const authRoutes = require('./routes/auth');
-const appRoutes = require('./routes/applications');
-const memberRoutes = require('./routes/members');
-const adminRoutes = require('./routes/admin');
-const adminManagementRoutes = require('./routes/adminManagement');
-const memberProfileRoutes = require('./routes/memberProfile');
-const contactRoutes = require('./routes/contact');
-
-// Mount the routes
-app.use('/api/auth', authRoutes);
-app.use('/api/applications', appRoutes);
-app.use('/api/members', memberRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/admin-management', adminManagementRoutes);
-app.use('/api/member', memberProfileRoutes);
-app.use('/api/contact', contactRoutes);
-
-/* =========================
-   HEALTH CHECK
-========================= */
+// Health check
 app.get('/', (req, res) => {
   res.json({
-    message: 'NAUS API is running!',
-    status: 'success',
-    timestamp: new Date().toISOString(),
-    env: process.env.NODE_ENV || 'development',
-    endpoints: {
-      auth: '/api/auth',
-      applications: '/api/applications',
-      members: '/api/members',
-      admin: '/api/admin',
-    },
+    message: 'NAUS Backend API is running',
+    status: 'healthy',
+    timestamp: new Date().toISOString()
   });
 });
 
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'healthy',
+    env: process.env.NODE_ENV || 'development',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Import route files
+const adminRoutes = require('./routes/admin');
+const applicationsRoutes = require('./routes/applications');
+const contactRoutes = require('./routes/contact');
+const authRoutes = require('./routes/auth');
+const memberProfileRoutes = require('./routes/memberProfile');
+const adminManagementRoutes = require('./routes/adminManagement');
+
+// Use routes
+app.use('/api', adminRoutes);
+app.use('/api/applications', applicationsRoutes);
+app.use('/api/contact', contactRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/member-profile', memberProfileRoutes);
+app.use('/api/admin-management', adminManagementRoutes);
+
+// Members routes
+const membersRoutes = require('./routes/members');
+app.use('/api/members', membersRoutes);
+
 /* =========================
-   ERROR HANDLER (CRITICAL)
+   ERROR HANDLING
 ========================= */
 app.use((err, req, res, next) => {
-  console.error('Error Stack:', err.stack);
+  console.error('Error:', err);
 
-  // Multer errors (File uploads)
+  // Multer errors
   if (err instanceof multer.MulterError) {
     if (err.code === 'LIMIT_FILE_SIZE') {
-      return res.status(400).json({ message: 'File too large. Max size is 5MB.' });
+      return res.status(400).json({ message: 'File too large. Maximum size is 5MB.' });
     }
-    return res.status(400).json({ message: 'File upload error: ' + err.message });
+    return res.status(400).json({ message: err.message });
   }
 
-  // Sequelize / Database errors
-  if (err.name === 'SequelizeValidationError') {
+  // Validation errors
+  if (err.name === 'ValidationError') {
     return res.status(400).json({ message: 'Validation error', errors: err.errors });
   }
 

@@ -6,8 +6,8 @@ const { Admin, Application } = require('../models');
 const EmailService = require('../services/emailService');
 const MemberModel = require('../models/MemberModel');
 
-// ADMIN LOGIN
-router.post('/login', async (req, res) => {
+// ADMIN LOGIN - CHANGED
+router.post('/admin/login', async (req, res) => {
     const { email, password } = req.body;
 
     try {
@@ -52,8 +52,8 @@ router.post('/login', async (req, res) => {
     }
 });
 
-// GET ALL APPLICATIONS
-router.get('/applications', async (req, res) => {
+// GET ALL APPLICATIONS - CHANGED
+router.get('/admin/applications', async (req, res) => {
     try {
         const apps = await Application.findAll({
             order: [['createdAt', 'DESC']]
@@ -65,8 +65,8 @@ router.get('/applications', async (req, res) => {
     }
 });
 
-// GET SINGLE APPLICATION BY ID
-router.get('/applications/:id', async (req, res) => {
+// GET SINGLE APPLICATION BY ID - CHANGED
+router.get('/admin/applications/:id', async (req, res) => {
     try {
         const app = await Application.findByPk(req.params.id);
         if (!app) return res.status(404).json({ message: "Application not found" });
@@ -78,8 +78,8 @@ router.get('/applications/:id', async (req, res) => {
     }
 });
 
-// UPDATE APPLICATION STATUS
-router.patch('/applications/:id', async (req, res) => {
+// UPDATE APPLICATION STATUS - CHANGED
+router.patch('/admin/applications/:id', async (req, res) => {
     try {
         const { status, notes } = req.body;
 
@@ -292,8 +292,8 @@ router.patch('/applications/:id', async (req, res) => {
     }
 });
 
-// POST /api/admin/existing-members - Create account for existing member
-router.post('/existing-members', async (req, res) => {
+// CREATE ACCOUNT FOR EXISTING MEMBER - CHANGED
+router.post('/admin/existing-members', async (req, res) => {
     try {
         const { firstName, lastName, email, membershipNumber } = req.body;
 
@@ -399,8 +399,8 @@ router.post('/existing-members', async (req, res) => {
     }
 });
 
-// GET /api/admin/existing-members - List all existing members
-router.get('/existing-members', async (req, res) => {
+// LIST ALL EXISTING MEMBERS - CHANGED
+router.get('/admin/existing-members', async (req, res) => {
     try {
         const { pool } = require('../config/database');
         const connection = await pool.getConnection();
