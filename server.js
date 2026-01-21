@@ -189,7 +189,7 @@ app.use('/api', adminRoutes);
 app.use('/api/applications', applicationsRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/auth', authRoutes);
-app.use('/api/member-profile', memberProfileRoutes);
+app.use('/api/member', memberProfileRoutes);
 app.use('/api/admin-management', adminManagementRoutes);
 
 // Members routes
