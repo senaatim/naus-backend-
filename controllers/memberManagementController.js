@@ -53,10 +53,10 @@ const getAllMembers = async (req, res) => {
       FROM members
       ${whereClause}
       ORDER BY createdAt DESC
-      LIMIT ? OFFSET ?
+      LIMIT ${limit} OFFSET ${offset}
     `;
 
-    const [members] = await pool.execute(membersQuery, [...queryParams, limit, offset]);
+    const [members] = await pool.query(membersQuery, queryParams);
 
     res.json({
       members,
