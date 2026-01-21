@@ -1,33 +1,31 @@
-const { Resend } = require('resend');
-
 class EmailService {
-  static resend = null;
-
-  static initializeResend() {
-    if (!this.resend && process.env.RESEND_API_KEY) {
-      this.resend = new Resend(process.env.RESEND_API_KEY);
-    }
-    return this.resend;
-  }
-
   static async sendEmail(to, subject, html) {
-    const resend = this.initializeResend();
+    const apiKey = process.env.RESEND_API_KEY;
 
-    if (!resend) {
+    if (!apiKey) {
       console.error('❌ RESEND_API_KEY not configured');
       return false;
     }
 
     try {
-      const { data, error } = await resend.emails.send({
-        from: process.env.EMAIL_FROM || 'NAUS <onboarding@resend.dev>',
-        to: to,
-        subject: subject,
-        html: html
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          from: process.env.EMAIL_FROM || 'NAUS <onboarding@resend.dev>',
+          to: to,
+          subject: subject,
+          html: html
+        })
       });
 
-      if (error) {
-        console.error('❌ Resend error:', error);
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error('❌ Resend error:', data);
         return false;
       }
 
