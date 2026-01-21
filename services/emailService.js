@@ -5,19 +5,23 @@ class EmailService {
 
   static initializeTransporter() {
     if (!this.transporter) {
+      // Gmail-specific configuration
       this.transporter = nodemailer.createTransport({
-        host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-        port: process.env.EMAIL_PORT || 587,
-        secure: false, // true for 465, false for other ports
+        service: 'gmail', // Use Gmail service instead of manual SMTP
         auth: {
           user: process.env.EMAIL_USER,
-          pass: process.env.EMAIL_PASS
-        }
+          pass: process.env.EMAIL_PASS // Use App Password, not regular password
+        },
+        // Add timeout settings for Render
+        connectionTimeout: 60000,
+        greetingTimeout: 30000,
+        socketTimeout: 60000
       });
     }
     return this.transporter;
   }
 
+  // All your existing methods remain the same...
   static async sendApprovalEmail(email, membershipNumber, tempPassword) {
     const transporter = this.initializeTransporter();
     const loginUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
@@ -49,9 +53,11 @@ class EmailService {
 
     try {
       await transporter.sendMail(mailOptions);
+      console.log('✅ Approval email sent successfully to:', email);
       return true;
     } catch (error) {
-      console.error('Error sending approval email:', error);
+      console.error('❌ Error sending approval email:', error);
+      console.error('Error details:', error.response || error.message);
       return false;
     }
   }
@@ -84,9 +90,11 @@ class EmailService {
 
     try {
       await transporter.sendMail(mailOptions);
+      console.log('✅ Rejection email sent successfully to:', email);
       return true;
     } catch (error) {
-      console.error('Error sending rejection email:', error);
+      console.error('❌ Error sending rejection email:', error);
+      console.error('Error details:', error.response || error.message);
       return false;
     }
   }
@@ -135,9 +143,11 @@ class EmailService {
 
     try {
       await transporter.sendMail(mailOptions);
+      console.log('✅ Welcome email sent successfully to:', email);
       return true;
     } catch (error) {
-      console.error('Error sending welcome email:', error);
+      console.error('❌ Error sending welcome email:', error);
+      console.error('Error details:', error.response || error.message);
       return false;
     }
   }
@@ -172,9 +182,11 @@ class EmailService {
 
     try {
       await transporter.sendMail(mailOptions);
+      console.log('✅ Contact email sent successfully from:', email);
       return true;
     } catch (error) {
-      console.error('Error sending contact email:', error);
+      console.error('❌ Error sending contact email:', error);
+      console.error('Error details:', error.response || error.message);
       return false;
     }
   }
@@ -221,9 +233,11 @@ class EmailService {
 
     try {
       await transporter.sendMail(mailOptions);
+      console.log('✅ Password reset email sent successfully to:', email);
       return true;
     } catch (error) {
-      console.error('Error sending password reset email:', error);
+      console.error('❌ Error sending password reset email:', error);
+      console.error('Error details:', error.response || error.message);
       return false;
     }
   }
@@ -248,9 +262,11 @@ class EmailService {
 
     try {
       await transporter.sendMail(mailOptions);
+      console.log('✅ Password changed email sent successfully to:', email);
       return true;
     } catch (error) {
-      console.error('Error sending password changed email:', error);
+      console.error('❌ Error sending password changed email:', error);
+      console.error('Error details:', error.response || error.message);
       return false;
     }
   }
