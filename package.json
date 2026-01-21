@@ -23,6 +23,7 @@
     "multer": "^2.0.2",
     "mysql2": "^3.16.0",
     "nodemailer": "^7.0.12",
+    "resend": "^3.2.0",
     "sequelize": "^6.37.7"
   },
   "devDependencies": {
