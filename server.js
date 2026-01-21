@@ -65,9 +65,13 @@ app.use(limiter);
 const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:3001',
+  'http://nausurology.org',
   'https://nausurology.org',
+  'http://www.nausurology.org',
   'https://www.nausurology.org',
+  'http://admin.nausurology.org',
   'https://admin.nausurology.org',
+  'http://cms.nausurology.org',
   'https://cms.nausurology.org'
 ];
 
