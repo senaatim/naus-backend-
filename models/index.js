@@ -56,90 +56,36 @@ const Application = sequelize.define('Application', {
     type: DataTypes.STRING,
     allowNull: false
   },
-  areaOfSpecialty: {
-    type: DataTypes.STRING,
-    allowNull: false
-  },
-  phoneNumber: {
-    type: DataTypes.STRING,
-    allowNull: false
-  },
+  areaOfSpecialty: DataTypes.STRING,
+  phoneNumber: DataTypes.STRING,
   email: {
     type: DataTypes.STRING,
     allowNull: false,
     unique: true
   },
-  streetAddress: {
-    type: DataTypes.TEXT,
-    allowNull: false
-  },
-  permanentAddress: {
-    type: DataTypes.TEXT,
-    allowNull: false
-  },
-  mdcnRegistrationNumber: {
-    type: DataTypes.STRING,
-    allowNull: false
-  },
-  yearQualifiedMBBS: {
-    type: DataTypes.INTEGER,
-    allowNull: false
-  },
-  additionalQualificationMDCN: {
-    type: DataTypes.STRING,
-    allowNull: false
-  },
-  yearQualifiedUrologist: {
-    type: DataTypes.INTEGER,
-    allowNull: false
-  },
-  currentPractice: {
-    type: DataTypes.STRING,
-    allowNull: false
-  },
-  nextOfKinName: {
-    type: DataTypes.STRING,
-    allowNull: false
-  },
-  nextOfKinPhone: {
-    type: DataTypes.STRING,
-    allowNull: false
-  },
-  nextOfKinEmail: {
-    type: DataTypes.STRING,
-    allowNull: false
-  },
-  fellowshipCollege: {
-    type: DataTypes.STRING,
-    allowNull: false
-  },
+  streetAddress: DataTypes.TEXT,
+  permanentAddress: DataTypes.TEXT,
+  mdcnRegistrationNumber: DataTypes.STRING,
+  yearQualifiedMBBS: DataTypes.INTEGER,
+  additionalQualificationMDCN: DataTypes.STRING,
+  yearQualifiedUrologist: DataTypes.INTEGER,
+  currentPractice: DataTypes.STRING,
+  nextOfKinName: DataTypes.STRING,
+  nextOfKinPhone: DataTypes.STRING,
+  nextOfKinEmail: DataTypes.STRING,
+  fellowshipCollege: DataTypes.STRING,
   fwacs: DataTypes.BOOLEAN,
   fmcs: DataTypes.BOOLEAN,
   facs: DataTypes.BOOLEAN,
   frcs: DataTypes.BOOLEAN,
   others: DataTypes.BOOLEAN,
-  qualificationYear: {
-    type: DataTypes.INTEGER,
-    allowNull: false
-  },
-  additionalQualification: {
-    type: DataTypes.STRING,
-    allowNull: false
-  },
-  residencyTraining: {
-    type: DataTypes.TEXT,
-    allowNull: false
-  },
+  qualificationYear: DataTypes.INTEGER,
+  additionalQualification: DataTypes.STRING,
+  residencyTraining: DataTypes.TEXT,
   foreignInstitution: DataTypes.STRING,
   conferenceAttended: DataTypes.STRING,
-  declaration: {
-    type: DataTypes.TEXT,
-    allowNull: false
-  },
-  date: {
-    type: DataTypes.DATE,
-    allowNull: false
-  },
+  declaration: DataTypes.TEXT,
+  date: DataTypes.DATE,
   status: {
     type: DataTypes.ENUM('pending', 'approved', 'rejected', 'under_review'),
     defaultValue: 'pending'
@@ -180,89 +126,35 @@ const Member = sequelize.define('Member', {
     type: DataTypes.STRING,
     allowNull: false
   },
-  areaOfSpecialty: {
-    type: DataTypes.STRING,
-    allowNull: false
-  },
-  phoneNumber: {
-    type: DataTypes.STRING,
-    allowNull: false
-  },
+  areaOfSpecialty: DataTypes.STRING,
+  phoneNumber: DataTypes.STRING,
   email: {
     type: DataTypes.STRING,
     allowNull: false
   },
-  streetAddress: {
-    type: DataTypes.TEXT,
-    allowNull: false
-  },
-  permanentAddress: {
-    type: DataTypes.TEXT,
-    allowNull: false
-  },
-  mdcnRegistrationNumber: {
-    type: DataTypes.STRING,
-    allowNull: false
-  },
-  yearQualifiedMBBS: {
-    type: DataTypes.INTEGER,
-    allowNull: false
-  },
-  additionalQualificationMDCN: {
-    type: DataTypes.STRING,
-    allowNull: false
-  },
-  yearQualifiedUrologist: {
-    type: DataTypes.INTEGER,
-    allowNull: false
-  },
-  currentPractice: {
-    type: DataTypes.STRING,
-    allowNull: false
-  },
-  nextOfKinName: {
-    type: DataTypes.STRING,
-    allowNull: false
-  },
-  nextOfKinPhone: {
-    type: DataTypes.STRING,
-    allowNull: false
-  },
-  nextOfKinEmail: {
-    type: DataTypes.STRING,
-    allowNull: false
-  },
-  fellowshipCollege: {
-    type: DataTypes.STRING,
-    allowNull: false
-  },
+  streetAddress: DataTypes.TEXT,
+  permanentAddress: DataTypes.TEXT,
+  mdcnRegistrationNumber: DataTypes.STRING,
+  yearQualifiedMBBS: DataTypes.INTEGER,
+  additionalQualificationMDCN: DataTypes.STRING,
+  yearQualifiedUrologist: DataTypes.INTEGER,
+  currentPractice: DataTypes.STRING,
+  nextOfKinName: DataTypes.STRING,
+  nextOfKinPhone: DataTypes.STRING,
+  nextOfKinEmail: DataTypes.STRING,
+  fellowshipCollege: DataTypes.STRING,
   fwacs: DataTypes.BOOLEAN,
   fmcs: DataTypes.BOOLEAN,
   facs: DataTypes.BOOLEAN,
   frcs: DataTypes.BOOLEAN,
   others: DataTypes.BOOLEAN,
-  qualificationYear: {
-    type: DataTypes.INTEGER,
-    allowNull: false
-  },
-  additionalQualification: {
-    type: DataTypes.STRING,
-    allowNull: false
-  },
-  residencyTraining: {
-    type: DataTypes.TEXT,
-    allowNull: false
-  },
+  qualificationYear: DataTypes.INTEGER,
+  additionalQualification: DataTypes.STRING,
+  residencyTraining: DataTypes.TEXT,
   foreignInstitution: DataTypes.STRING,
   conferenceAttended: DataTypes.STRING,
-  declaration: {
-    type: DataTypes.TEXT,
-    allowNull: false
-  },
-  date: {
-    type: DataTypes.DATE,
-    allowNull: false
-  },
+  declaration: DataTypes.TEXT,
+  date: DataTypes.DATE,
   mbbsCertificate: DataTypes.STRING,
   fellowshipCertificate: DataTypes.STRING,
   isActive: {

@@ -287,10 +287,57 @@ const searchMembers = async (req, res) => {
   }
 };
 
+// Delete member and related records
+const deleteMember = async (req, res) => {
+  console.log(">>>>>>> DELETE MEMBER CALLED <<<<<<<<<");
+  console.log("Params:", req.params);
+  console.log("User:", req.user);
+  console.log("Deleting member ID:", req.params.id);
+
+  try {
+    const { id } = req.params;
+
+    // Get member details first
+    const [member] = await pool.execute(
+      'SELECT email, membershipNumber FROM members WHERE id = ?',
+      [id]
+    );
+
+    if (member.length === 0) {
+      console.log(">>>>>>> MEMBER NOT FOUND <<<<<<<<<");
+      return res.status(404).json({ message: 'Member not found' });
+    }
+
+    const { email, membershipNumber } = member[0];
+
+    console.log(">>>>>>> DELETING RELATED RECORDS <<<<<<<<<");
+    
+    // Delete from all related tables
+    await pool.execute('DELETE FROM users WHERE email = ?', [email]);
+    await pool.execute('DELETE FROM applications WHERE email = ?', [email]);
+    await pool.execute('DELETE FROM members WHERE id = ?', [id]);
+
+    console.log(">>>>>>> MEMBER DELETED SUCCESSFULLY <<<<<<<<<");
+    
+    res.json({
+      message: 'Member deleted successfully',
+      deletedMember: {
+        id,
+        email,
+        membershipNumber
+      }
+    });
+  } catch (error) {
+    console.error('Error deleting member:', error);
+    res.status(500).json({ message: 'Failed to delete member', error: error.message });
+  }
+};
+
 module.exports = {
   getAllMembers,
   getMemberById,
   updateMember,
   toggleMemberStatus,
-  searchMembers
+  searchMembers,
+  deleteMember
 };

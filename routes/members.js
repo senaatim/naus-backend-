@@ -6,7 +6,8 @@ const {
   getMemberById,
   updateMember,
   toggleMemberStatus,
-  searchMembers
+  searchMembers,
+  deleteMember
 } = require('../controllers/memberManagementController');
 
 // All routes require authentication
@@ -18,5 +19,6 @@ router.get('/search', searchMembers);
 router.get('/:id', getMemberById);
 router.put('/:id', updateMember);
 router.patch('/:id/status', toggleMemberStatus);
+router.delete('/:id', deleteMember);
 
 module.exports = router;

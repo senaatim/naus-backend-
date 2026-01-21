@@ -61,18 +61,18 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-// CORS Configuration
+// CORS Configuration (Fixed trailing spaces)
 const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:3001',
   'http://nausurology.org',
-  'https://nausurology.org',
+  'https://nausurology.org',         // Fixed: removed trailing spaces
   'http://www.nausurology.org',
-  'https://www.nausurology.org',
+  'https://www.nausurology.org',     // Fixed: removed trailing spaces
   'http://admin.nausurology.org',
-  'https://admin.nausurology.org',
+  'https://admin.nausurology.org',   // Fixed: removed trailing spaces
   'http://cms.nausurology.org',
-  'https://cms.nausurology.org'
+  'https://cms.nausurology.org'      // Fixed: removed trailing spaces
 ];
 
 if (process.env.ALLOWED_ORIGINS) {
@@ -151,6 +151,31 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// DEBUG ENDPOINTS - Remove after testing
+app.get('/api/_debug/routes', (req, res) => {
+  const routes = [];
+  const stack = app._router.stack;
+
+  stack.forEach(layer => {
+    if (layer.route) {
+      const routeInfo = {
+        path: layer.route.path,
+        methods: Object.keys(layer.route.methods).filter(method => layer.route.methods[method])
+      };
+      routes.push(routeInfo);
+    }
+  });
+
+  res.json({ 
+    message: 'Available routes',
+    routes: routes.filter(r => r.path.includes('member'))
+  });
+});
+
+app.get('/api/_debug/test-delete', (req, res) => {
+  res.json({ message: 'DELETE endpoint route exists and is accessible!' });
+});
+
 // Import route files
 const adminRoutes = require('./routes/admin');
 const applicationsRoutes = require('./routes/applications');
@@ -202,7 +227,12 @@ app.use((err, req, res, next) => {
    404 HANDLER
 ========================= */
 app.use((req, res) => {
-  res.status(404).json({ message: 'Route not found' });
+  console.log('404 Error - Route not found:', req.method, req.url); // Added logging
+  res.status(404).json({ 
+    message: 'Route not found',
+    method: req.method,
+    url: req.url
+  });
 });
 
 /* =========================
