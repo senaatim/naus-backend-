@@ -15,7 +15,7 @@ class EmailService {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          from: process.env.EMAIL_FROM || 'NAUS <onboarding@resend.dev>',
+          from: 'NAUS <noreply@nausurology.org>',
           to: to,
           subject: subject,
           html: html
