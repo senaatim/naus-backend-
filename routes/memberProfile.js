@@ -25,10 +25,9 @@ const authenticateToken = (req, res, next) => {
 };
 
 // Configure multer for certificate uploads
-const storage = multer.diskStorage({
+const certificateStorage = multer.diskStorage({
   destination: (req, file, cb) => {
     const uploadDir = path.join(__dirname, '../uploads/certificates');
-    // Create directory if it doesn't exist
     if (!fs.existsSync(uploadDir)) {
       fs.mkdirSync(uploadDir, { recursive: true });
     }
@@ -41,7 +40,7 @@ const storage = multer.diskStorage({
 });
 
 const upload = multer({
-  storage: storage,
+  storage: certificateStorage,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
   fileFilter: (req, file, cb) => {
     const allowedTypes = /pdf|jpg|jpeg|png/;
@@ -55,6 +54,144 @@ const upload = multer({
     }
   }
 });
+
+// Configure multer for profile photo uploads
+const photoStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadDir = path.join(__dirname, '../uploads/photos');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, 'photo-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const uploadPhoto = multer({
+  storage: photoStorage,
+  limits: { fileSize: 2 * 1024 * 1024 }, // 2MB limit for photos
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = /jpg|jpeg|png/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedTypes.test(file.mimetype);
+
+    if (mimetype && extname) {
+      return cb(null, true);
+    } else {
+      cb(new Error('Only JPG, JPEG, and PNG images are allowed'));
+    }
+  }
+});
+
+// =====================================================
+// SPECIFIC PROFILE SUB-ROUTES (must be defined BEFORE general /profile routes)
+// =====================================================
+
+// POST upload profile photo
+router.post('/profile/photo', authenticateToken, uploadPhoto.single('photo'), async (req, res) => {
+  let connection;
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'No photo uploaded' });
+    }
+
+    connection = await pool.getConnection();
+
+    // Get user's membership number
+    const [users] = await connection.execute(
+      'SELECT membershipNumber FROM users WHERE id = ?',
+      [req.user.id]
+    );
+
+    if (users.length === 0) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const membershipNumber = users[0].membershipNumber;
+    const fileName = 'photos/' + req.file.filename;
+
+    // Get current photo to delete old one
+    const [members] = await connection.execute(
+      'SELECT profilePhoto FROM members WHERE membershipNumber = ?',
+      [membershipNumber]
+    );
+
+    // Delete old photo if exists
+    if (members.length > 0 && members[0].profilePhoto) {
+      const oldPhotoPath = path.join(__dirname, '../uploads', members[0].profilePhoto);
+      if (fs.existsSync(oldPhotoPath)) {
+        fs.unlinkSync(oldPhotoPath);
+      }
+    }
+
+    // Update profile photo in database
+    await connection.execute(
+      'UPDATE members SET profilePhoto = ? WHERE membershipNumber = ?',
+      [fileName, membershipNumber]
+    );
+
+    res.json({
+      message: 'Profile photo uploaded successfully',
+      photoUrl: fileName
+    });
+
+  } catch (error) {
+    console.error('Error uploading profile photo:', error);
+    res.status(500).json({ message: 'Error uploading profile photo', error: error.message });
+  } finally {
+    if (connection) connection.release();
+  }
+});
+
+// PUT update privacy settings (directory visibility)
+router.put('/profile/privacy', authenticateToken, async (req, res) => {
+  let connection;
+  try {
+    const { showInDirectory } = req.body;
+
+    if (typeof showInDirectory !== 'boolean') {
+      return res.status(400).json({ message: 'showInDirectory must be a boolean' });
+    }
+
+    connection = await pool.getConnection();
+
+    // Get user's membership number
+    const [users] = await connection.execute(
+      'SELECT membershipNumber FROM users WHERE id = ?',
+      [req.user.id]
+    );
+
+    if (users.length === 0) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const membershipNumber = users[0].membershipNumber;
+
+    // Update privacy setting
+    await connection.execute(
+      'UPDATE members SET showInDirectory = ? WHERE membershipNumber = ?',
+      [showInDirectory ? 1 : 0, membershipNumber]
+    );
+
+    res.json({
+      message: 'Privacy settings updated successfully',
+      showInDirectory: showInDirectory
+    });
+
+  } catch (error) {
+    console.error('Error updating privacy settings:', error);
+    res.status(500).json({ message: 'Error updating privacy settings', error: error.message });
+  } finally {
+    if (connection) connection.release();
+  }
+});
+
+// =====================================================
+// GENERAL PROFILE ROUTES
+// =====================================================
 
 // GET member profile
 router.get('/profile', authenticateToken, async (req, res) => {
@@ -122,6 +259,8 @@ router.get('/profile', authenticateToken, async (req, res) => {
       membershipType: member.membershipType,
       isActive: member.isActive,
       joinedDate: member.joinedDate,
+      profilePhoto: member.profilePhoto,
+      showInDirectory: member.showInDirectory,
       createdAt: member.createdAt
     });
 
@@ -361,6 +500,175 @@ router.post('/change-password', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Error changing password:', error);
     res.status(500).json({ message: 'Error changing password', error: error.message });
+  } finally {
+    if (connection) connection.release();
+  }
+});
+
+// GET member directory (public - shows only members who opted in)
+router.get('/directory', async (req, res) => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+
+    const { search, specialty, page = 1, limit = 20 } = req.query;
+    const offset = (page - 1) * limit;
+
+    let query = `
+      SELECT
+        membershipNumber,
+        firstName,
+        middleName,
+        lastName,
+        areaOfSpecialty,
+        currentPractice,
+        profilePhoto,
+        joinedDate
+      FROM members
+      WHERE showInDirectory = 1 AND isActive = 1
+    `;
+
+    const params = [];
+
+    if (search) {
+      query += ` AND (firstName LIKE ? OR lastName LIKE ? OR currentPractice LIKE ?)`;
+      const searchTerm = `%${search}%`;
+      params.push(searchTerm, searchTerm, searchTerm);
+    }
+
+    if (specialty) {
+      query += ` AND areaOfSpecialty LIKE ?`;
+      params.push(`%${specialty}%`);
+    }
+
+    // Get total count
+    const countQuery = query.replace(
+      /SELECT[\s\S]*?FROM/,
+      'SELECT COUNT(*) as total FROM'
+    );
+    const [countResult] = await connection.execute(countQuery, params);
+    const total = countResult[0].total;
+
+    // Add pagination
+    query += ` ORDER BY lastName, firstName LIMIT ? OFFSET ?`;
+    params.push(parseInt(limit), parseInt(offset));
+
+    const [members] = await connection.execute(query, params);
+
+    res.json({
+      members: members,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: total,
+        totalPages: Math.ceil(total / limit)
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching member directory:', error);
+    res.status(500).json({ message: 'Error fetching member directory', error: error.message });
+  } finally {
+    if (connection) connection.release();
+  }
+});
+
+// GET single member profile for directory (public)
+router.get('/directory/:membershipNumber', async (req, res) => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+
+    const { membershipNumber } = req.params;
+
+    const [members] = await connection.execute(`
+      SELECT
+        membershipNumber,
+        firstName,
+        middleName,
+        lastName,
+        areaOfSpecialty,
+        currentPractice,
+        profilePhoto,
+        joinedDate,
+        fellowshipCollege,
+        fwacs,
+        fmcs,
+        facs,
+        frcs
+      FROM members
+      WHERE membershipNumber = ? AND showInDirectory = 1 AND isActive = 1
+    `, [membershipNumber]);
+
+    if (members.length === 0) {
+      return res.status(404).json({ message: 'Member not found or profile is private' });
+    }
+
+    res.json(members[0]);
+
+  } catch (error) {
+    console.error('Error fetching member profile:', error);
+    res.status(500).json({ message: 'Error fetching member profile', error: error.message });
+  } finally {
+    if (connection) connection.release();
+  }
+});
+
+// GET verify member (public - for QR code verification)
+router.get('/verify/:membershipNumber', async (req, res) => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+
+    const { membershipNumber } = req.params;
+
+    const [members] = await connection.execute(`
+      SELECT
+        membershipNumber,
+        firstName,
+        middleName,
+        lastName,
+        areaOfSpecialty,
+        currentPractice,
+        profilePhoto,
+        isActive,
+        joinedDate,
+        membershipType
+      FROM members
+      WHERE membershipNumber = ?
+    `, [membershipNumber]);
+
+    if (members.length === 0) {
+      return res.status(404).json({
+        verified: false,
+        message: 'Member not found'
+      });
+    }
+
+    const member = members[0];
+
+    res.json({
+      verified: true,
+      member: {
+        membershipNumber: member.membershipNumber,
+        firstName: member.firstName,
+        middleName: member.middleName,
+        lastName: member.lastName,
+        areaOfSpecialty: member.areaOfSpecialty,
+        currentPractice: member.currentPractice,
+        profilePhoto: member.profilePhoto,
+        isActive: member.isActive,
+        joinedDate: member.joinedDate,
+        membershipType: member.membershipType
+      }
+    });
+
+  } catch (error) {
+    console.error('Error verifying member:', error);
+    res.status(500).json({
+      verified: false,
+      message: 'Error verifying member'
+    });
   } finally {
     if (connection) connection.release();
   }

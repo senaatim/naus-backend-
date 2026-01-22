@@ -101,6 +101,17 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Ensure upload directories exist
+const fs = require('fs');
+const uploadDirs = ['uploads', 'uploads/photos', 'uploads/certificates'];
+uploadDirs.forEach(dir => {
+  const dirPath = path.join(__dirname, dir);
+  if (!fs.existsSync(dirPath)) {
+    fs.mkdirSync(dirPath, { recursive: true });
+    console.log(`Created directory: ${dir}`);
+  }
+});
+
 // Static files for uploads
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
@@ -176,12 +187,48 @@ app.get('/api/_debug/test-delete', (req, res) => {
   res.json({ message: 'DELETE endpoint route exists and is accessible!' });
 });
 
+// Debug: List all registered routes
+app.get('/api/_debug/all-routes', (req, res) => {
+  const routes = [];
+  app._router.stack.forEach((middleware) => {
+    if (middleware.route) {
+      routes.push({
+        path: middleware.route.path,
+        methods: Object.keys(middleware.route.methods)
+      });
+    } else if (middleware.name === 'router' && middleware.handle.stack) {
+      const basePath = middleware.regexp.source
+        .replace('\\/?(?=\\/|$)', '')
+        .replace(/\\\//g, '/')
+        .replace(/\^/, '')
+        .replace(/\?\(\?=.*\)/, '');
+
+      middleware.handle.stack.forEach((handler) => {
+        if (handler.route) {
+          routes.push({
+            path: basePath + handler.route.path,
+            methods: Object.keys(handler.route.methods)
+          });
+        }
+      });
+    }
+  });
+  res.json({ totalRoutes: routes.length, routes });
+});
+
 // Import route files
 const adminRoutes = require('./routes/admin');
 const applicationsRoutes = require('./routes/applications');
 const contactRoutes = require('./routes/contact');
 const authRoutes = require('./routes/auth');
-const memberProfileRoutes = require('./routes/memberProfile');
+let memberProfileRoutes;
+try {
+  memberProfileRoutes = require('./routes/memberProfile');
+  console.log('✅ memberProfile routes loaded successfully');
+} catch (err) {
+  console.error('❌ Error loading memberProfile routes:', err.message);
+  console.error(err.stack);
+}
 const adminManagementRoutes = require('./routes/adminManagement');
 
 // Use routes

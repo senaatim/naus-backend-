@@ -115,11 +115,44 @@ const createTables = async () => {
         membershipType ENUM('existing', 'new') DEFAULT 'new',
         hasAccount BOOLEAN DEFAULT 0,
         accountCreated TIMESTAMP NULL,
+        profilePhoto VARCHAR(255),
+        showInDirectory BOOLEAN DEFAULT 1,
         createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
     console.log('✅ Members table created!');
+
+    // Add new columns if they don't exist (for existing databases)
+    console.log('Adding new columns if they do not exist...');
+    try {
+      // Check if profilePhoto column exists
+      const [profilePhotoCol] = await connection.query(`
+        SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = '${dbName}' AND TABLE_NAME = 'members' AND COLUMN_NAME = 'profilePhoto'
+      `);
+      if (profilePhotoCol.length === 0) {
+        await connection.query(`ALTER TABLE members ADD COLUMN profilePhoto VARCHAR(255)`);
+        console.log('✅ profilePhoto column added!');
+      }
+
+      // Check if showInDirectory column exists
+      const [showInDirCol] = await connection.query(`
+        SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = '${dbName}' AND TABLE_NAME = 'members' AND COLUMN_NAME = 'showInDirectory'
+      `);
+      if (showInDirCol.length === 0) {
+        await connection.query(`ALTER TABLE members ADD COLUMN showInDirectory BOOLEAN DEFAULT 1`);
+        console.log('✅ showInDirectory column added!');
+      }
+
+      // Update existing NULL values to default
+      await connection.query(`UPDATE members SET showInDirectory = 1 WHERE showInDirectory IS NULL`);
+
+      console.log('✅ New columns verified!');
+    } catch (alterError) {
+      console.log('Column check/add error:', alterError.message);
+    }
 
     console.log('Creating users table...');
     await connection.query(`
