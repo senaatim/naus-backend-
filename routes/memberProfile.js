@@ -1,9 +1,12 @@
 const express = require('express');
 const router = express.Router();
-const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
 const { pool } = require('../config/database');
+const {
+  uploadPhoto,
+  uploadCertificate,
+  deleteFromCloudinary,
+  getPublicIdFromUrl
+} = require('../config/cloudinary');
 
 // JWT authentication middleware
 const authenticateToken = (req, res, next) => {
@@ -24,73 +27,11 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-// Configure multer for certificate uploads
-const certificateStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadDir = path.join(__dirname, '../uploads/certificates');
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, 'cert-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
-
-const upload = multer({
-  storage: certificateStorage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
-  fileFilter: (req, file, cb) => {
-    const allowedTypes = /pdf|jpg|jpeg|png/;
-    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = allowedTypes.test(file.mimetype);
-
-    if (mimetype && extname) {
-      return cb(null, true);
-    } else {
-      cb(new Error('Only PDF, JPG, JPEG, and PNG files are allowed'));
-    }
-  }
-});
-
-// Configure multer for profile photo uploads
-const photoStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadDir = path.join(__dirname, '../uploads/photos');
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, 'photo-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
-
-const uploadPhoto = multer({
-  storage: photoStorage,
-  limits: { fileSize: 2 * 1024 * 1024 }, // 2MB limit for photos
-  fileFilter: (req, file, cb) => {
-    const allowedTypes = /jpg|jpeg|png/;
-    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = allowedTypes.test(file.mimetype);
-
-    if (mimetype && extname) {
-      return cb(null, true);
-    } else {
-      cb(new Error('Only JPG, JPEG, and PNG images are allowed'));
-    }
-  }
-});
-
 // =====================================================
 // SPECIFIC PROFILE SUB-ROUTES (must be defined BEFORE general /profile routes)
 // =====================================================
 
-// POST upload profile photo
+// POST upload profile photo (Cloudinary)
 router.post('/profile/photo', authenticateToken, uploadPhoto.single('photo'), async (req, res) => {
   let connection;
   try {
@@ -111,31 +52,35 @@ router.post('/profile/photo', authenticateToken, uploadPhoto.single('photo'), as
     }
 
     const membershipNumber = users[0].membershipNumber;
-    const fileName = 'photos/' + req.file.filename;
 
-    // Get current photo to delete old one
+    // Cloudinary returns the URL in req.file.path
+    const photoUrl = req.file.path;
+    console.log('Photo uploaded to Cloudinary:', photoUrl);
+
+    // Get current photo to delete old one from Cloudinary
     const [members] = await connection.execute(
       'SELECT profilePhoto FROM members WHERE membershipNumber = ?',
       [membershipNumber]
     );
 
-    // Delete old photo if exists
+    // Delete old photo from Cloudinary if exists
     if (members.length > 0 && members[0].profilePhoto) {
-      const oldPhotoPath = path.join(__dirname, '../uploads', members[0].profilePhoto);
-      if (fs.existsSync(oldPhotoPath)) {
-        fs.unlinkSync(oldPhotoPath);
+      const oldPublicId = getPublicIdFromUrl(members[0].profilePhoto);
+      if (oldPublicId) {
+        await deleteFromCloudinary(oldPublicId);
+        console.log('Deleted old photo from Cloudinary:', oldPublicId);
       }
     }
 
-    // Update profile photo in database
+    // Update profile photo in database (store full Cloudinary URL)
     await connection.execute(
       'UPDATE members SET profilePhoto = ? WHERE membershipNumber = ?',
-      [fileName, membershipNumber]
+      [photoUrl, membershipNumber]
     );
 
     res.json({
       message: 'Profile photo uploaded successfully',
-      photoUrl: fileName
+      photoUrl: photoUrl
     });
 
   } catch (error) {
@@ -341,8 +286,8 @@ router.put('/profile', authenticateToken, async (req, res) => {
   }
 });
 
-// POST upload certificate
-router.post('/certificates/upload', authenticateToken, upload.single('certificate'), async (req, res) => {
+// POST upload certificate (Cloudinary)
+router.post('/certificates/upload', authenticateToken, uploadCertificate.single('certificate'), async (req, res) => {
   let connection;
   try {
     if (!req.file) {
@@ -368,19 +313,38 @@ router.post('/certificates/upload', authenticateToken, upload.single('certificat
     }
 
     const membershipNumber = users[0].membershipNumber;
-    const fileName = 'certificates/' + req.file.filename;
 
-    // Update certificate path in database
+    // Cloudinary returns the URL in req.file.path
+    const certificateUrl = req.file.path;
+    console.log('Certificate uploaded to Cloudinary:', certificateUrl);
+
+    // Get current certificate to delete old one from Cloudinary
     const column = certificateType === 'mbbs' ? 'mbbsCertificate' : 'fellowshipCertificate';
+    const [members] = await connection.execute(
+      `SELECT ${column} as currentCert FROM members WHERE membershipNumber = ?`,
+      [membershipNumber]
+    );
 
+    // Delete old certificate from Cloudinary if exists
+    if (members.length > 0 && members[0].currentCert) {
+      const oldPublicId = getPublicIdFromUrl(members[0].currentCert);
+      if (oldPublicId) {
+        // Determine resource type based on file extension
+        const resourceType = members[0].currentCert.includes('.pdf') ? 'raw' : 'image';
+        await deleteFromCloudinary(oldPublicId, resourceType);
+        console.log('Deleted old certificate from Cloudinary:', oldPublicId);
+      }
+    }
+
+    // Update certificate URL in database (store full Cloudinary URL)
     await connection.execute(
       `UPDATE members SET ${column} = ? WHERE membershipNumber = ?`,
-      [fileName, membershipNumber]
+      [certificateUrl, membershipNumber]
     );
 
     res.json({
       message: 'Certificate uploaded successfully',
-      fileName: fileName,
+      certificateUrl: certificateUrl,
       certificateType: certificateType
     });
 
@@ -392,7 +356,7 @@ router.post('/certificates/upload', authenticateToken, upload.single('certificat
   }
 });
 
-// GET download certificate
+// GET download certificate (redirects to Cloudinary URL)
 router.get('/certificates/:type', authenticateToken, async (req, res) => {
   let connection;
   try {
@@ -417,26 +381,20 @@ router.get('/certificates/:type', authenticateToken, async (req, res) => {
     const membershipNumber = users[0].membershipNumber;
     const column = type === 'mbbs' ? 'mbbsCertificate' : 'fellowshipCertificate';
 
-    // Get certificate path
+    // Get certificate URL from database
     const [members] = await connection.execute(
-      `SELECT ${column} as certificatePath FROM members WHERE membershipNumber = ?`,
+      `SELECT ${column} as certificateUrl FROM members WHERE membershipNumber = ?`,
       [membershipNumber]
     );
 
-    if (members.length === 0 || !members[0].certificatePath) {
+    if (members.length === 0 || !members[0].certificateUrl) {
       return res.status(404).json({ message: 'Certificate not found' });
     }
 
-    const certificatePath = members[0].certificatePath;
-    const filePath = path.join(__dirname, '../uploads', certificatePath);
+    const certificateUrl = members[0].certificateUrl;
 
-    // Check if file exists
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ message: 'Certificate file not found on server' });
-    }
-
-    // Send file
-    res.download(filePath);
+    // Redirect to Cloudinary URL for download
+    res.redirect(certificateUrl);
 
   } catch (error) {
     console.error('Error downloading certificate:', error);
@@ -511,7 +469,9 @@ router.get('/directory', async (req, res) => {
   try {
     connection = await pool.getConnection();
 
-    const { search, specialty, page = 1, limit = 20 } = req.query;
+    const { search, specialty } = req.query;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
     const offset = (page - 1) * limit;
 
     let query = `
@@ -549,17 +509,16 @@ router.get('/directory', async (req, res) => {
     const [countResult] = await connection.execute(countQuery, params);
     const total = countResult[0].total;
 
-    // Add pagination
-    query += ` ORDER BY lastName, firstName LIMIT ? OFFSET ?`;
-    params.push(parseInt(limit), parseInt(offset));
+    // Add pagination - use template literal for LIMIT/OFFSET to avoid mysql2 binding issues
+    query += ` ORDER BY lastName, firstName LIMIT ${limit} OFFSET ${offset}`;
 
     const [members] = await connection.execute(query, params);
 
     res.json({
       members: members,
       pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
+        page: page,
+        limit: limit,
         total: total,
         totalPages: Math.ceil(total / limit)
       }
@@ -604,7 +563,9 @@ router.get('/directory/:membershipNumber', async (req, res) => {
       return res.status(404).json({ message: 'Member not found or profile is private' });
     }
 
-    res.json(members[0]);
+    const member = members[0];
+
+    res.json(member);
 
   } catch (error) {
     console.error('Error fetching member profile:', error);

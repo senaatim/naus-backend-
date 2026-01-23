@@ -112,8 +112,16 @@ uploadDirs.forEach(dir => {
   }
 });
 
-// Static files for uploads
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// Static files for uploads - with explicit logging
+const uploadsPath = path.join(__dirname, 'uploads');
+console.log('Static uploads path:', uploadsPath);
+
+app.use('/uploads', (req, res, next) => {
+  const filePath = path.join(uploadsPath, req.path);
+  console.log('Static file request:', req.path, '-> Full path:', filePath);
+  console.log('File exists:', fs.existsSync(filePath));
+  next();
+}, express.static(uploadsPath));
 
 /* =========================
    FILE UPLOAD CONFIGURATION
