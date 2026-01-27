@@ -213,6 +213,63 @@ class EmailService {
 
     return await this.sendEmail(email, 'Password Changed Successfully', html);
   }
+
+  static async sendAdminWelcomeEmail(email, name, role, tempPassword) {
+    const adminUrl = process.env.ADMIN_URL || 'https://admin.nausurology.org';
+    const contactEmail = process.env.CONTACT_EMAIL || 'urologistsinnigeria@gmail.com';
+
+    const roleDisplay = {
+      'super_admin': 'Super Administrator',
+      'membership_admin': 'Membership Administrator',
+      'content_admin': 'Content Administrator'
+    };
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #2c3e50; border-bottom: 2px solid #007bff; padding-bottom: 10px;">
+          Welcome to NAUS Admin Panel
+        </h2>
+        <p>Dear ${name},</p>
+        <p>You have been added as an administrator on the Nigerian Association of Urological Surgeons (NAUS) platform.</p>
+
+        <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0;">
+          <h3 style="margin-top: 0; color: #2c3e50;">Your Login Credentials:</h3>
+          <p><strong>Email:</strong> ${email}</p>
+          <p><strong>Temporary Password:</strong> <code style="background: #e9ecef; padding: 4px 8px; border-radius: 3px;">${tempPassword}</code></p>
+          <p><strong>Role:</strong> ${roleDisplay[role] || role}</p>
+        </div>
+
+        <p style="color: #dc3545; font-weight: bold;">
+          ⚠️ Important: Please change your password immediately after your first login for security reasons.
+        </p>
+
+        <div style="margin: 30px 0; text-align: center;">
+          <a href="${adminUrl}/login" style="background-color: #007bff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">
+            Login to Admin Panel
+          </a>
+        </div>
+
+        <p>As an administrator, you will have access to:</p>
+        <ul>
+          <li>Member management</li>
+          <li>Membership application reviews</li>
+          <li>Content management</li>
+          <li>System administration (based on your role)</li>
+        </ul>
+
+        <p>If you have any questions or did not expect this email, please contact us immediately at <a href="mailto:${contactEmail}">${contactEmail}</a>.</p>
+
+        <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+        <p style="color: #666; font-size: 12px;">
+          This is an automated message from the NAUS Admin System. Please do not reply directly to this email.
+        </p>
+        <p>Best regards,<br>
+        <strong>NAUS Administration</strong></p>
+      </div>
+    `;
+
+    return await this.sendEmail(email, 'NAUS Admin Account Created - Your Login Credentials', html);
+  }
 }
 
 module.exports = EmailService;

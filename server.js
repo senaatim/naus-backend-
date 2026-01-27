@@ -18,6 +18,50 @@ const createTables = require('./config/createTables');
 /* =========================
    DATABASE INITIALIZATION
 ========================= */
+
+// Fix admin roles ENUM to ensure correct values
+const fixAdminRolesEnum = async () => {
+  try {
+    const [results] = await sequelize.query(`
+      SELECT COLUMN_TYPE
+      FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 'admins'
+      AND COLUMN_NAME = 'role'
+    `);
+
+    if (results.length > 0) {
+      const currentType = results[0].COLUMN_TYPE;
+      // Check if ENUM needs to be updated
+      if (!currentType.includes('membership_admin') || currentType.includes("'admin'")) {
+        console.log('🔧 Fixing admin roles ENUM...');
+
+        // First, add all values to allow migration
+        await sequelize.query(`
+          ALTER TABLE admins
+          MODIFY COLUMN role ENUM('super_admin', 'membership_admin', 'content_admin', 'admin', 'moderator')
+          DEFAULT 'membership_admin'
+        `);
+
+        // Migrate old values
+        await sequelize.query(`UPDATE admins SET role = 'membership_admin' WHERE role = 'admin'`);
+        await sequelize.query(`UPDATE admins SET role = 'content_admin' WHERE role = 'moderator'`);
+
+        // Clean up to final ENUM
+        await sequelize.query(`
+          ALTER TABLE admins
+          MODIFY COLUMN role ENUM('super_admin', 'membership_admin', 'content_admin')
+          DEFAULT 'membership_admin'
+        `);
+
+        console.log('✅ Admin roles ENUM fixed!');
+      }
+    }
+  } catch (error) {
+    console.log('⚠️ Could not fix admin roles ENUM:', error.message);
+  }
+};
+
 const initializeDatabase = async () => {
   try {
     await connectDB();
@@ -29,6 +73,9 @@ const initializeDatabase = async () => {
     // Sync Sequelize Models
     await sequelize.sync({ alter: false });
     console.log('✅ Sequelize models synced');
+
+    // Fix admin roles ENUM if needed
+    await fixAdminRolesEnum();
 
   } catch (error) {
     console.error('❌ Database initialization failed:', error);

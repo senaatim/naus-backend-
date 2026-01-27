@@ -1,5 +1,7 @@
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const { Admin } = require('../models');
+const EmailService = require('../services/emailService');
 
 // Get all admins with pagination and search
 const getAllAdmins = async (req, res) => {
@@ -56,14 +58,26 @@ const getAdminById = async (req, res) => {
   }
 };
 
+// Generate a secure random password
+const generateDefaultPassword = () => {
+  const length = 12;
+  const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%';
+  let password = '';
+  const randomBytes = crypto.randomBytes(length);
+  for (let i = 0; i < length; i++) {
+    password += charset[randomBytes[i] % charset.length];
+  }
+  return password;
+};
+
 // Create new admin
 const createAdmin = async (req, res) => {
   try {
-    const { name, email, password, role = 'admin' } = req.body;
+    const { name, email, password, role = 'membership_admin' } = req.body;
 
-    // Validate required fields
-    if (!name || !email || !password) {
-      return res.status(400).json({ message: 'Name, email, and password are required' });
+    // Validate required fields (password is now optional - will be auto-generated)
+    if (!name || !email) {
+      return res.status(400).json({ message: 'Name and email are required' });
     }
 
     // Validate email format
@@ -78,8 +92,11 @@ const createAdmin = async (req, res) => {
       return res.status(400).json({ message: 'Admin with this email already exists' });
     }
 
+    // Use provided password or generate a default one
+    const tempPassword = password || generateDefaultPassword();
+
     // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
     // Create admin
     const newAdmin = await Admin.create({
@@ -90,12 +107,21 @@ const createAdmin = async (req, res) => {
       isActive: true
     });
 
+    // Send welcome email with credentials
+    try {
+      await EmailService.sendAdminWelcomeEmail(email, name, role, tempPassword);
+      console.log(`✅ Welcome email sent to new admin: ${email}`);
+    } catch (emailError) {
+      console.error('❌ Failed to send welcome email:', emailError);
+      // Don't fail the request if email fails - admin is still created
+    }
+
     // Return admin without password
     const adminData = newAdmin.toJSON();
     delete adminData.password;
 
     res.status(201).json({
-      message: 'Admin created successfully',
+      message: 'Admin created successfully. Login credentials have been sent to their email.',
       admin: adminData
     });
   } catch (error) {
