@@ -70,10 +70,24 @@ const generateDefaultPassword = () => {
   return password;
 };
 
+// Valid roles mapping - converts old/invalid roles to valid ones
+const normalizeRole = (role) => {
+  const validRoles = ['super_admin', 'membership_admin', 'content_admin'];
+  const roleMapping = {
+    'admin': 'membership_admin',
+    'moderator': 'content_admin',
+    'super_admin': 'super_admin',
+    'membership_admin': 'membership_admin',
+    'content_admin': 'content_admin'
+  };
+  return roleMapping[role] || 'membership_admin';
+};
+
 // Create new admin
 const createAdmin = async (req, res) => {
   try {
-    const { name, email, password, role = 'membership_admin' } = req.body;
+    const { name, email, password, role: rawRole = 'membership_admin' } = req.body;
+    const role = normalizeRole(rawRole);
 
     // Validate required fields (password is now optional - will be auto-generated)
     if (!name || !email) {
@@ -157,7 +171,7 @@ const updateAdmin = async (req, res) => {
     // Update admin fields
     if (name) admin.name = name;
     if (email) admin.email = email;
-    if (role) admin.role = role;
+    if (role) admin.role = normalizeRole(role);
     if (typeof isActive === 'boolean') admin.isActive = isActive;
 
     await admin.save();
