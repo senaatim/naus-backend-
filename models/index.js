@@ -34,6 +34,12 @@ const Admin = sequelize.define('Admin', {
   },
   lastLogin: {
     type: DataTypes.DATE
+  },
+  resetPasswordToken: {
+    type: DataTypes.STRING
+  },
+  resetPasswordExpires: {
+    type: DataTypes.DATE
   }
 }, {
   tableName: 'admins',

@@ -270,6 +270,123 @@ class EmailService {
 
     return await this.sendEmail(email, 'NAUS Admin Account Created - Your Login Credentials', html);
   }
+  static async sendAdminAccountUpdatedEmail(email, name, changes) {
+    const adminUrl = process.env.ADMIN_URL || 'https://admin.nausurology.org';
+    const contactEmail = process.env.CONTACT_EMAIL || 'urologistsinnigeria@gmail.com';
+
+    const changesList = changes.map(c => `<li><strong>${c.field}:</strong> ${c.detail}</li>`).join('');
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #2c3e50; border-bottom: 2px solid #007bff; padding-bottom: 10px;">
+          Admin Account Updated
+        </h2>
+        <p>Dear ${name},</p>
+        <p>Your NAUS admin account details have been updated by an administrator.</p>
+
+        <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0;">
+          <h3 style="margin-top: 0; color: #2c3e50;">Changes Made:</h3>
+          <ul>${changesList}</ul>
+        </div>
+
+        <div style="margin: 30px 0; text-align: center;">
+          <a href="${adminUrl}/login" style="background-color: #007bff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">
+            Login to Admin Panel
+          </a>
+        </div>
+
+        <p>If you did not expect these changes, please contact us immediately at <a href="mailto:${contactEmail}">${contactEmail}</a>.</p>
+
+        <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+        <p style="color: #666; font-size: 12px;">
+          This is an automated message from the NAUS Admin System.
+        </p>
+        <p>Best regards,<br>
+        <strong>NAUS Administration</strong></p>
+      </div>
+    `;
+
+    return await this.sendEmail(email, 'NAUS Admin Account - Your Account Details Have Been Updated', html);
+  }
+
+  static async sendAdminPasswordChangedByAdminEmail(email, name, newPassword) {
+    const adminUrl = process.env.ADMIN_URL || 'https://admin.nausurology.org';
+    const contactEmail = process.env.CONTACT_EMAIL || 'urologistsinnigeria@gmail.com';
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #2c3e50; border-bottom: 2px solid #dc3545; padding-bottom: 10px;">
+          Your Admin Password Has Been Changed
+        </h2>
+        <p>Dear ${name},</p>
+        <p>Your NAUS admin account password has been changed by an administrator.</p>
+
+        <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0;">
+          <h3 style="margin-top: 0; color: #2c3e50;">Your New Login Credentials:</h3>
+          <p><strong>Email:</strong> ${email}</p>
+          <p><strong>New Password:</strong> <code style="background: #e9ecef; padding: 4px 8px; border-radius: 3px;">${newPassword}</code></p>
+        </div>
+
+        <p style="color: #dc3545; font-weight: bold;">
+          Please change your password after logging in for security reasons.
+        </p>
+
+        <div style="margin: 30px 0; text-align: center;">
+          <a href="${adminUrl}/login" style="background-color: #007bff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">
+            Login to Admin Panel
+          </a>
+        </div>
+
+        <p>If you did not expect this change, please contact us immediately at <a href="mailto:${contactEmail}">${contactEmail}</a>.</p>
+
+        <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+        <p style="color: #666; font-size: 12px;">
+          This is an automated message from the NAUS Admin System.
+        </p>
+        <p>Best regards,<br>
+        <strong>NAUS Administration</strong></p>
+      </div>
+    `;
+
+    return await this.sendEmail(email, 'NAUS Admin Account - Your Password Has Been Changed', html);
+  }
+
+  static async sendAdminPasswordResetEmail(email, resetToken) {
+    const adminUrl = process.env.ADMIN_URL || 'https://admin.nausurology.org';
+    const resetUrl = `${adminUrl}/reset-password/${resetToken}`;
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #2c3e50; border-bottom: 2px solid #007bff; padding-bottom: 10px;">
+          Admin Password Reset Request
+        </h2>
+        <p>Hello,</p>
+        <p>We received a request to reset your password for your NAUS admin account.</p>
+        <p>Click the button below to reset your password:</p>
+        <div style="margin: 30px 0; text-align: center;">
+          <a href="${resetUrl}" style="background-color: #007bff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">
+            Reset Password
+          </a>
+        </div>
+        <p style="color: #666; font-size: 14px;">
+          This link will expire in 1 hour for security reasons.
+        </p>
+        <p style="color: #666; font-size: 14px;">
+          If you did not request a password reset, please ignore this email. Your password will remain unchanged.
+        </p>
+        <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+        <p style="color: #999; font-size: 12px;">
+          If the button doesn't work, copy and paste this link into your browser:<br>
+          <a href="${resetUrl}" style="color: #007bff;">${resetUrl}</a>
+        </p>
+        <br>
+        <p>Best regards,<br>
+        <strong>NAUS Security Team</strong></p>
+      </div>
+    `;
+
+    return await this.sendEmail(email, 'NAUS Admin - Password Reset Request', html);
+  }
 }
 
 module.exports = EmailService;

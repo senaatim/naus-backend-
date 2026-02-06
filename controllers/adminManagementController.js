@@ -148,7 +148,7 @@ const createAdmin = async (req, res) => {
 const updateAdmin = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, email, role, isActive } = req.body;
+    const { name, email, password, role, isActive } = req.body;
 
     const admin = await Admin.findByPk(id);
     if (!admin) {
@@ -168,13 +168,64 @@ const updateAdmin = async (req, res) => {
       }
     }
 
-    // Update admin fields
-    if (name) admin.name = name;
-    if (email) admin.email = email;
-    if (role) admin.role = normalizeRole(role);
-    if (typeof isActive === 'boolean') admin.isActive = isActive;
+    // Track changes for email notification
+    const changes = [];
+    let passwordChanged = false;
+    let plainPassword = '';
+    const roleLabels = { super_admin: 'Super Admin', membership_admin: 'Membership Admin', content_admin: 'Content Admin' };
+
+    // Update fields and track what changed
+    if (name) {
+      if (name !== admin.name) {
+        changes.push({ field: 'Name', detail: `Changed to "${name}"` });
+      }
+      admin.name = name;
+    }
+    if (email) {
+      if (email !== admin.email) {
+        changes.push({ field: 'Email', detail: `Changed to "${email}"` });
+      }
+      admin.email = email;
+    }
+    if (role) {
+      const newRole = normalizeRole(role);
+      if (newRole !== admin.role) {
+        changes.push({ field: 'Role', detail: `Changed to "${roleLabels[newRole] || newRole}"` });
+      }
+      admin.role = newRole;
+    }
+    if (typeof isActive !== 'undefined') {
+      const newActive = Boolean(isActive);
+      const oldActive = Boolean(admin.isActive);
+      if (newActive !== oldActive) {
+        changes.push({ field: 'Status', detail: newActive ? 'Activated' : 'Deactivated' });
+      }
+      admin.isActive = newActive;
+    }
+    if (password && password.length >= 6) {
+      const hashedPassword = await bcrypt.hash(password, 10);
+      admin.password = hashedPassword;
+      passwordChanged = true;
+      plainPassword = password;
+      changes.push({ field: 'Password', detail: 'Password was changed' });
+    }
 
     await admin.save();
+
+    // Send email notification about changes
+    if (changes.length > 0) {
+      try {
+        if (passwordChanged) {
+          await EmailService.sendAdminPasswordChangedByAdminEmail(admin.email, admin.name, plainPassword);
+          console.log(`✅ Password change email sent to admin: ${admin.email}`);
+        } else {
+          await EmailService.sendAdminAccountUpdatedEmail(admin.email, admin.name, changes);
+          console.log(`✅ Account update email sent to admin: ${admin.email}`);
+        }
+      } catch (emailError) {
+        console.error('❌ Failed to send update notification email:', emailError);
+      }
+    }
 
     // Return admin without password
     const adminData = admin.toJSON();
@@ -205,9 +256,8 @@ const deleteAdmin = async (req, res) => {
       return res.status(404).json({ message: 'Admin not found' });
     }
 
-    // Soft delete by setting isActive to false
-    admin.isActive = false;
-    await admin.save();
+    // Hard delete - remove from database
+    await admin.destroy();
 
     res.json({ message: 'Admin deleted successfully' });
   } catch (error) {
@@ -320,6 +370,96 @@ const changePassword = async (req, res) => {
   }
 };
 
+// Forgot password - send reset email
+const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ message: 'Email is required' });
+    }
+
+    const admin = await Admin.findOne({ where: { email } });
+
+    // Always return success to prevent email enumeration
+    if (!admin) {
+      return res.json({
+        status: 'success',
+        message: 'If an account exists with that email, a password reset link has been sent.'
+      });
+    }
+
+    // Generate reset token
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetTokenHash = crypto.createHash('sha256').update(resetToken).digest('hex');
+    const resetExpires = new Date(Date.now() + 3600000); // 1 hour
+
+    // Store reset token
+    admin.resetPasswordToken = resetTokenHash;
+    admin.resetPasswordExpires = resetExpires;
+    await admin.save();
+
+    // Send reset email
+    await EmailService.sendAdminPasswordResetEmail(admin.email, resetToken);
+
+    res.json({
+      status: 'success',
+      message: 'If an account exists with that email, a password reset link has been sent.'
+    });
+  } catch (error) {
+    console.error('Admin forgot password error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+// Reset password - verify token and set new password
+const resetPassword = async (req, res) => {
+  try {
+    const { token, password } = req.body;
+
+    if (!token || !password) {
+      return res.status(400).json({ message: 'Token and new password are required' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters' });
+    }
+
+    // Hash token to compare with stored hash
+    const resetTokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+    const { Op } = require('sequelize');
+    const admin = await Admin.findOne({
+      where: {
+        resetPasswordToken: resetTokenHash,
+        resetPasswordExpires: { [Op.gt]: new Date() }
+      }
+    });
+
+    if (!admin) {
+      return res.status(400).json({ message: 'Invalid or expired reset token. Please request a new password reset.' });
+    }
+
+    // Hash new password and clear reset token
+    const hashedPassword = await bcrypt.hash(password, 10);
+    admin.password = hashedPassword;
+    admin.resetPasswordToken = null;
+    admin.resetPasswordExpires = null;
+    await admin.save();
+
+    // Send confirmation email
+    await EmailService.sendPasswordChangedEmail(admin.email);
+
+    res.json({
+      status: 'success',
+      message: 'Password has been reset successfully. You can now log in with your new password.'
+    });
+  } catch (error) {
+    console.error('Admin reset password error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
 module.exports = {
   getAllAdmins,
   getAdminById,
@@ -328,5 +468,7 @@ module.exports = {
   deleteAdmin,
   getCurrentAdmin,
   updateCurrentAdmin,
-  changePassword
+  changePassword,
+  forgotPassword,
+  resetPassword
 };

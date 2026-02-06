@@ -9,10 +9,16 @@ const {
   deleteAdmin,
   getCurrentAdmin,
   updateCurrentAdmin,
-  changePassword
+  changePassword,
+  forgotPassword,
+  resetPassword
 } = require('../controllers/adminManagementController');
 
-// All routes require authentication
+// Public routes (no authentication required)
+router.post('/forgot-password', forgotPassword);
+router.post('/reset-password', resetPassword);
+
+// All routes below require authentication
 router.use(authenticateToken);
 
 // Admin CRUD routes
