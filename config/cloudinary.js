@@ -2,66 +2,46 @@ const cloudinary = require('cloudinary').v2;
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const multer = require('multer');
 
-// Configure Cloudinary
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
-// Storage for profile photos
 const photoStorage = new CloudinaryStorage({
   cloudinary: cloudinary,
-  params: {
-    folder: 'naus/photos',
-    allowed_formats: ['jpg', 'jpeg', 'png'],
-    transformation: [{ width: 500, height: 500, crop: 'limit', quality: 'auto' }]
-  }
+  params: { folder: 'naus-photos', allowed_formats: ['jpg', 'png', 'jpeg'] }
 });
 
-// Storage for certificates
 const certificateStorage = new CloudinaryStorage({
   cloudinary: cloudinary,
-  params: {
-    folder: 'naus/certificates',
-    allowed_formats: ['pdf', 'jpg', 'jpeg', 'png'],
-    resource_type: 'auto'
-  }
+  params: { folder: 'naus-certificates', allowed_formats: ['jpg', 'png', 'jpeg', 'pdf'], resource_type: 'auto' }
 });
 
-// Multer upload instances
-const uploadPhoto = multer({
-  storage: photoStorage,
-  limits: { fileSize: 2 * 1024 * 1024 } // 2MB limit for photos
-});
+const uploadPhoto = multer({ storage: photoStorage });
+const uploadCertificate = multer({ storage: certificateStorage });
 
-const uploadCertificate = multer({
-  storage: certificateStorage,
-  limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit for certificates
-});
-
-// Helper function to delete a file from Cloudinary
-const deleteFromCloudinary = async (publicId, resourceType = 'image') => {
+const getPublicIdFromUrl = (url) => {
   try {
-    if (!publicId) return;
-    const result = await cloudinary.uploader.destroy(publicId, { resource_type: resourceType });
-    console.log('Cloudinary delete result:', result);
-    return result;
-  } catch (error) {
-    console.error('Error deleting from Cloudinary:', error);
+    const parts = url.split('/');
+    const filenameWithExtension = parts[parts.length - 1];
+    const publicId = filenameWithExtension.split('.')[0];
+    const folder = parts[parts.length - 2];
+    return folder ? `${folder}/${publicId}` : publicId;
+  } catch (e) {
+    return null;
   }
 };
 
-// Extract public ID from Cloudinary URL
-const getPublicIdFromUrl = (url) => {
-  if (!url) return null;
-  // URL format: https://res.cloudinary.com/cloud_name/image/upload/v1234567890/folder/filename.ext
-  const matches = url.match(/\/v\d+\/(.+)\.\w+$/);
-  return matches ? matches[1] : null;
+const deleteFromCloudinary = async (publicId, resourceType = 'image') => {
+  try {
+    await cloudinary.uploader.destroy(publicId, { resource_type: resourceType });
+  } catch (err) {
+    console.error('Error deleting from Cloudinary:', err);
+  }
 };
 
 module.exports = {
-  cloudinary,
   uploadPhoto,
   uploadCertificate,
   deleteFromCloudinary,
