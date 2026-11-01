@@ -10,85 +10,13 @@ const path = require('path');
 const multer = require('multer');
 const morgan = require('morgan');
 
-// Database and Models
-const { sequelize } = require('./models');
-const { connectDB } = require('./config/database');
-const createTables = require('./config/createTables');
-
-/* =========================
-   DATABASE INITIALIZATION
-========================= */
-
-// Fix admin roles ENUM to ensure correct values
-const fixAdminRolesEnum = async () => {
-  try {
-    const [results] = await sequelize.query(`
-      SELECT COLUMN_TYPE
-      FROM INFORMATION_SCHEMA.COLUMNS
-      WHERE TABLE_SCHEMA = DATABASE()
-      AND TABLE_NAME = 'admins'
-      AND COLUMN_NAME = 'role'
-    `);
-
-    if (results.length > 0) {
-      const currentType = results[0].COLUMN_TYPE;
-      // Check if ENUM needs to be updated
-      if (!currentType.includes('membership_admin') || currentType.includes("'admin'")) {
-        console.log('🔧 Fixing admin roles ENUM...');
-
-        // First, add all values to allow migration
-        await sequelize.query(`
-          ALTER TABLE admins
-          MODIFY COLUMN role ENUM('super_admin', 'membership_admin', 'content_admin', 'admin', 'moderator')
-          DEFAULT 'membership_admin'
-        `);
-
-        // Migrate old values
-        await sequelize.query(`UPDATE admins SET role = 'membership_admin' WHERE role = 'admin'`);
-        await sequelize.query(`UPDATE admins SET role = 'content_admin' WHERE role = 'moderator'`);
-
-        // Clean up to final ENUM
-        await sequelize.query(`
-          ALTER TABLE admins
-          MODIFY COLUMN role ENUM('super_admin', 'membership_admin', 'content_admin')
-          DEFAULT 'membership_admin'
-        `);
-
-        console.log('✅ Admin roles ENUM fixed!');
-      }
-    }
-  } catch (error) {
-    console.log('⚠️ Could not fix admin roles ENUM:', error.message);
-  }
-};
-
-const initializeDatabase = async () => {
-  try {
-    await connectDB();
-    console.log('✅ Database connected successfully');
-
-    // Create tables if they don't exist
-    await createTables();
-
-    // Sync Sequelize Models
-    await sequelize.sync({ alter: false });
-    console.log('✅ Sequelize models synced');
-
-    // Fix admin roles ENUM if needed
-    await fixAdminRolesEnum();
-
-  } catch (error) {
-    console.error('❌ Database initialization failed:', error);
-  }
-};
-
-// Initialize database
-initializeDatabase();
-
 /* =========================
    EXPRESS APP SETUP
 ========================= */
 const app = express();
+
+// REQUIRED for Render reverse proxy (Fixes express-rate-limit error)
+app.set('trust proxy', 1);
 
 /* =========================
    MIDDLEWARE
@@ -108,18 +36,18 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-// CORS Configuration (Fixed trailing spaces)
+// CORS Configuration
 const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:3001',
   'http://nausurology.org',
-  'https://nausurology.org',         // Fixed: removed trailing spaces
+  'https://nausurology.org',
   'http://www.nausurology.org',
-  'https://www.nausurology.org',     // Fixed: removed trailing spaces
+  'https://www.nausurology.org',
   'http://admin.nausurology.org',
-  'https://admin.nausurology.org',   // Fixed: removed trailing spaces
+  'https://admin.nausurology.org',
   'http://cms.nausurology.org',
-  'https://cms.nausurology.org'      // Fixed: removed trailing spaces
+  'https://cms.nausurology.org'
 ];
 
 if (process.env.ALLOWED_ORIGINS) {
@@ -129,9 +57,7 @@ if (process.env.ALLOWED_ORIGINS) {
 
 app.use(cors({
   origin: function(origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl)
     if (!origin) return callback(null, true);
-
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else if (process.env.NODE_ENV === 'development' && origin.includes('.ngrok')) {
@@ -159,43 +85,14 @@ uploadDirs.forEach(dir => {
   }
 });
 
-// Static files for uploads - with explicit logging
+// Static files for uploads
 const uploadsPath = path.join(__dirname, 'uploads');
 console.log('Static uploads path:', uploadsPath);
 
 app.use('/uploads', (req, res, next) => {
   const filePath = path.join(uploadsPath, req.path);
-  console.log('Static file request:', req.path, '-> Full path:', filePath);
-  console.log('File exists:', fs.existsSync(filePath));
   next();
 }, express.static(uploadsPath));
-
-/* =========================
-   FILE UPLOAD CONFIGURATION
-========================= */
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, 'uploads/');
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
-  }
-});
-
-const upload = multer({
-  storage: storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
-  fileFilter: (req, file, cb) => {
-    const allowedTypes = /jpeg|jpg|png|pdf/;
-    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = allowedTypes.test(file.mimetype);
-    if (extname && mimetype) {
-      return cb(null, true);
-    }
-    cb(new Error('Only images (JPEG, PNG) and PDFs are allowed'));
-  }
-});
 
 /* =========================
    ROUTES
@@ -217,60 +114,6 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// DEBUG ENDPOINTS - Remove after testing
-app.get('/api/_debug/routes', (req, res) => {
-  const routes = [];
-  const stack = app._router.stack;
-
-  stack.forEach(layer => {
-    if (layer.route) {
-      const routeInfo = {
-        path: layer.route.path,
-        methods: Object.keys(layer.route.methods).filter(method => layer.route.methods[method])
-      };
-      routes.push(routeInfo);
-    }
-  });
-
-  res.json({ 
-    message: 'Available routes',
-    routes: routes.filter(r => r.path.includes('member'))
-  });
-});
-
-app.get('/api/_debug/test-delete', (req, res) => {
-  res.json({ message: 'DELETE endpoint route exists and is accessible!' });
-});
-
-// Debug: List all registered routes
-app.get('/api/_debug/all-routes', (req, res) => {
-  const routes = [];
-  app._router.stack.forEach((middleware) => {
-    if (middleware.route) {
-      routes.push({
-        path: middleware.route.path,
-        methods: Object.keys(middleware.route.methods)
-      });
-    } else if (middleware.name === 'router' && middleware.handle.stack) {
-      const basePath = middleware.regexp.source
-        .replace('\\/?(?=\\/|$)', '')
-        .replace(/\\\//g, '/')
-        .replace(/\^/, '')
-        .replace(/\?\(\?=.*\)/, '');
-
-      middleware.handle.stack.forEach((handler) => {
-        if (handler.route) {
-          routes.push({
-            path: basePath + handler.route.path,
-            methods: Object.keys(handler.route.methods)
-          });
-        }
-      });
-    }
-  });
-  res.json({ totalRoutes: routes.length, routes });
-});
-
 // Import route files
 const adminRoutes = require('./routes/admin');
 const applicationsRoutes = require('./routes/applications');
@@ -285,6 +128,7 @@ try {
   console.error(err.stack);
 }
 const adminManagementRoutes = require('./routes/adminManagement');
+const membersRoutes = require('./routes/members');
 
 // Use routes
 app.use('/api', adminRoutes);
@@ -293,9 +137,6 @@ app.use('/api/contact', contactRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/member', memberProfileRoutes);
 app.use('/api/admin-management', adminManagementRoutes);
-
-// Members routes
-const membersRoutes = require('./routes/members');
 app.use('/api/members', membersRoutes);
 
 /* =========================
@@ -329,7 +170,7 @@ app.use((err, req, res, next) => {
    404 HANDLER
 ========================= */
 app.use((req, res) => {
-  console.log('404 Error - Route not found:', req.method, req.url); // Added logging
+  console.log('404 Error - Route not found:', req.method, req.url);
   res.status(404).json({ 
     message: 'Route not found',
     method: req.method,
@@ -348,5 +189,4 @@ app.listen(PORT, () => {
   console.log('--------------------------------------------');
 });
 
-// Export for Vercel
 module.exports = app;
