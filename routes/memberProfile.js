@@ -40,13 +40,14 @@ router.post('/profile/photo', authenticateToken, uploadPhoto.single('photo'), as
       return res.status(400).json({ message: 'No photo uploaded' });
     }
 
+    const userEmail = req.user.email ? req.user.email.trim() : '';
     const photoUrl = req.file.path;
 
     // Get current photo to delete old one from Cloudinary
     const { data: member } = await supabase
       .from('members')
       .select('profilephoto')
-      .eq('email', req.user.email)
+      .ilike('email', userEmail)
       .maybeSingle();
 
     if (member && member.profilephoto) {
@@ -60,7 +61,7 @@ router.post('/profile/photo', authenticateToken, uploadPhoto.single('photo'), as
     const { error } = await supabase
       .from('members')
       .update({ profilephoto: photoUrl })
-      .eq('email', req.user.email);
+      .ilike('email', userEmail);
 
     if (error) throw error;
 
@@ -79,6 +80,7 @@ router.post('/profile/photo', authenticateToken, uploadPhoto.single('photo'), as
 router.put('/profile/privacy', authenticateToken, async (req, res) => {
   try {
     const { showInDirectory } = req.body;
+    const userEmail = req.user.email ? req.user.email.trim() : '';
 
     if (typeof showInDirectory !== 'boolean') {
       return res.status(400).json({ message: 'showInDirectory must be a boolean' });
@@ -87,7 +89,7 @@ router.put('/profile/privacy', authenticateToken, async (req, res) => {
     const { error } = await supabase
       .from('members')
       .update({ showindirectory: showInDirectory })
-      .eq('email', req.user.email);
+      .ilike('email', userEmail);
 
     if (error) throw error;
 
@@ -109,13 +111,22 @@ router.put('/profile/privacy', authenticateToken, async (req, res) => {
 // GET member profile
 router.get('/profile', authenticateToken, async (req, res) => {
   try {
+    const userEmail = req.user.email ? req.user.email.trim() : '';
+    console.log('🔍 Fetching profile for email:', userEmail);
+
     const { data: member, error } = await supabase
       .from('members')
       .select('*')
-      .eq('email', req.user.email)
+      .ilike('email', userEmail)
       .maybeSingle();
 
-    if (error || !member) {
+    if (error) {
+      console.error('Supabase query error:', error);
+      throw error;
+    }
+
+    if (!member) {
+      console.warn(`⚠️ Member profile not found for email: ${userEmail}`);
       return res.status(404).json({ message: 'Member profile not found' });
     }
 
@@ -168,6 +179,7 @@ router.get('/profile', authenticateToken, async (req, res) => {
 // PUT update member profile
 router.put('/profile', authenticateToken, async (req, res) => {
   try {
+    const userEmail = req.user.email ? req.user.email.trim() : '';
     const {
       firstName,
       middleName,
@@ -196,7 +208,7 @@ router.put('/profile', authenticateToken, async (req, res) => {
         nextofkinemail: nextOfKinEmail,
         updatedat: new Date()
       })
-      .eq('email', req.user.email);
+      .ilike('email', userEmail);
 
     if (error) throw error;
 
@@ -216,6 +228,7 @@ router.post('/certificates/upload', authenticateToken, uploadCertificate.single(
     }
 
     const { certificateType } = req.body; // 'mbbs' or 'fellowship'
+    const userEmail = req.user.email ? req.user.email.trim() : '';
 
     if (!['mbbs', 'fellowship'].includes(certificateType)) {
       return res.status(400).json({ message: 'Invalid certificate type. Use "mbbs" or "fellowship"' });
@@ -228,7 +241,7 @@ router.post('/certificates/upload', authenticateToken, uploadCertificate.single(
     const { data: member } = await supabase
       .from('members')
       .select(column)
-      .eq('email', req.user.email)
+      .ilike('email', userEmail)
       .maybeSingle();
 
     if (member && member[column]) {
@@ -243,7 +256,7 @@ router.post('/certificates/upload', authenticateToken, uploadCertificate.single(
     const { error } = await supabase
       .from('members')
       .update({ [column]: certificateUrl })
-      .eq('email', req.user.email);
+      .ilike('email', userEmail);
 
     if (error) throw error;
 
@@ -263,6 +276,7 @@ router.post('/certificates/upload', authenticateToken, uploadCertificate.single(
 router.get('/certificates/:type', authenticateToken, async (req, res) => {
   try {
     const { type } = req.params; // 'mbbs' or 'fellowship'
+    const userEmail = req.user.email ? req.user.email.trim() : '';
 
     if (!['mbbs', 'fellowship'].includes(type)) {
       return res.status(400).json({ message: 'Invalid certificate type' });
@@ -273,7 +287,7 @@ router.get('/certificates/:type', authenticateToken, async (req, res) => {
     const { data: member, error } = await supabase
       .from('members')
       .select(`${column} as certificateurl`)
-      .eq('email', req.user.email)
+      .ilike('email', userEmail)
       .maybeSingle();
 
     if (error || !member || !member.certificateurl) {
