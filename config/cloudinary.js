@@ -1,6 +1,7 @@
 const cloudinary = require('cloudinary').v2;
-const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -8,26 +9,37 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
-const photoStorage = new CloudinaryStorage({
-  cloudinary: cloudinary,
-  params: { folder: 'naus-photos', allowed_formats: ['jpg', 'png', 'jpeg'] }
+// Use standard local disk storage temporarily, then we can pipe or handle it
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadDir = 'uploads/temp';
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    cb(null, Date.now() + '-' + file.originalname);
+  }
 });
 
-const certificateStorage = new CloudinaryStorage({
-  cloudinary: cloudinary,
-  params: { folder: 'naus-certificates', allowed_formats: ['jpg', 'png', 'jpeg', 'pdf'], resource_type: 'auto' }
+const upload = multer({ 
+  storage: storage,
+  limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
 });
 
-const uploadPhoto = multer({ storage: photoStorage });
-const uploadCertificate = multer({ storage: certificateStorage });
+// Helper middlewares matching your existing code structure
+const uploadPhoto = upload;
+const uploadCertificate = upload;
 
 const getPublicIdFromUrl = (url) => {
   try {
+    if (!url) return null;
     const parts = url.split('/');
     const filenameWithExtension = parts[parts.length - 1];
     const publicId = filenameWithExtension.split('.')[0];
     const folder = parts[parts.length - 2];
-    return folder ? `${folder}/${publicId}` : publicId;
+    return folder && folder !== 'upload' ? `${folder}/${publicId}` : publicId;
   } catch (e) {
     return null;
   }
@@ -45,5 +57,6 @@ module.exports = {
   uploadPhoto,
   uploadCertificate,
   deleteFromCloudinary,
-  getPublicIdFromUrl
+  getPublicIdFromUrl,
+  cloudinary
 };
