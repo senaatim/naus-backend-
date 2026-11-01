@@ -1,7 +1,15 @@
 const express = require('express');
 const multer = require('multer');
+const cloudinary = require('cloudinary').v2;
 const router = express.Router();
 const supabase = require('../config/supabase');
+
+// ---------- Cloudinary config ----------
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
 
 // ---------- multer (memory storage, 5MB per file) ----------
 const ALLOWED_TYPES = [
@@ -48,20 +56,15 @@ const toDate = (v) => {
   return Number.isNaN(d.getTime()) ? null : d.toISOString().split('T')[0];
 };
 
-// ---------- file upload (Supabase Storage bucket: "certificates") ----------
-const uploadCertificate = async (file) => {
-  const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
-  const fileName = `${Date.now()}-${safeName}`;
-
-  const { error } = await supabase.storage
-    .from('certificates')
-    .upload(fileName, file.buffer, { contentType: file.mimetype });
-
-  if (error) throw error;
-
-  const { data } = supabase.storage.from('certificates').getPublicUrl(fileName);
-  return data.publicUrl;
-};
+// ---------- file upload (Cloudinary) ----------
+const uploadCertificate = (file) =>
+  new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      { folder: 'naus-certificates', resource_type: 'auto' },
+      (err, result) => (err ? reject(err) : resolve(result.secure_url))
+    );
+    stream.end(file.buffer);
+  });
 
 // ---------- route ----------
 router.post(
@@ -74,9 +77,6 @@ router.post(
     try {
       const body = req.body;
       const files = req.files;
-
-      console.log('FILES:', Object.keys(files || {}));
-      console.log('BODY:', Object.keys(body || {}));
 
       if (!files?.mbbsCertificate || !files?.fellowshipCertificate) {
         return res
@@ -107,8 +107,10 @@ router.post(
           .json({ message: 'An application with this email is already pending' });
       }
 
-      const mbbsUrl = await uploadCertificate(files.mbbsCertificate[0]);
-      const fellowshipUrl = await uploadCertificate(files.fellowshipCertificate[0]);
+      const [mbbsUrl, fellowshipUrl] = await Promise.all([
+        uploadCertificate(files.mbbsCertificate[0]),
+        uploadCertificate(files.fellowshipCertificate[0])
+      ]);
 
       const record = {
         firstname: clean(body.firstName),
@@ -135,7 +137,7 @@ router.post(
         fmcs: toBool(body.fmcs),
         facs: toBool(body.facs),
         frcs: toBool(body.frcs),
-        // the form sends "true"/"false" for others; if your column is text, change toBool to clean
+        // if your "others" column is text, change toBool to clean
         others: toBool(body.others),
         qualificationyear: toInt(body.qualificationYear),
         additionalqualification: clean(body.additionalQualification),
