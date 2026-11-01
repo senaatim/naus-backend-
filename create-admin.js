@@ -8,37 +8,37 @@ async function createAdmin() {
     await sequelize.authenticate();
     console.log('✅ Connected to database\n');
 
-    // Check if admin already exists
-    const existingAdmin = await Admin.findOne({ where: { email: 'admin@naus.org.ng' } });
-
-    if (existingAdmin) {
-      console.log('⚠️  Admin already exists:');
-      console.log('   Email:', existingAdmin.email);
-      console.log('   Name:', existingAdmin.name);
-      console.log('   Role:', existingAdmin.role);
-      console.log('   Active:', existingAdmin.isActive);
-      console.log('\nIf you forgot the password, delete this admin and run the script again.');
-      process.exit(0);
-    }
-
-    // Hash password
+    const targetEmail = 'senaatim10@gmail.com';
     const password = 'Admin123!';
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create admin
-    const admin = await Admin.create({
-      name: 'Super Admin',
-      email: 'admin@naus.org.ng',
-      password: hashedPassword,
-      role: 'super_admin',
-      isActive: true
-    });
+    // Check if admin already exists
+    let admin = await Admin.findOne({ where: { email: targetEmail } });
 
-    console.log('✅ Super Admin created successfully!\n');
+    if (admin) {
+      // Update existing record to ensure super_admin role and active status
+      admin.role = 'super_admin';
+      admin.isActive = true;
+      admin.password = hashedPassword;
+      admin.name = 'Sena Atim';
+      await admin.save();
+      console.log('⚠️ Admin already existed. Credentials and role updated successfully!\n');
+    } else {
+      // Create new super admin
+      admin = await Admin.create({
+        name: 'Sena Atim',
+        email: targetEmail,
+        password: hashedPassword,
+        role: 'super_admin',
+        isActive: true
+      });
+      console.log('✅ Super Admin created successfully!\n');
+    }
+
     console.log('╔════════════════════════════════════════╗');
-    console.log('║         ADMIN CREDENTIALS              ║');
+    console.log('║            ADMIN CREDENTIALS           ║');
     console.log('╠════════════════════════════════════════╣');
-    console.log('║ Email:    admin@naus.org.ng            ║');
+    console.log('║ Email:    senaatim10@gmail.com         ║');
     console.log('║ Password: Admin123!                    ║');
     console.log('║ Role:     super_admin                  ║');
     console.log('╚════════════════════════════════════════╝');
@@ -48,9 +48,9 @@ async function createAdmin() {
   } catch (error) {
     console.error('❌ Error creating admin:', error.message);
     console.error('\nPossible issues:');
-    console.error('- Database not running (check MySQL/PostgreSQL)');
+    console.error('- Database not running');
     console.error('- Database credentials wrong (check .env file)');
-    console.error('- Tables not created (run: node create-database.js)');
+    console.error('- Tables not created');
     process.exit(1);
   }
 }
