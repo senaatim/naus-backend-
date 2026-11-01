@@ -1,121 +1,112 @@
-// Create a test member account for login testing
-const bcrypt = require('bcryptjs');
-const { pool } = require('./config/database');
-const MemberModel = require('./models/MemberModel');
+const { createClient } = require('@supabase/supabase-js');
+require('dotenv').config();
+
+// Initialize Supabase with the secure Service Role key
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
 async function createTestMember() {
-  let connection;
+  console.log('🔧 Creating Supabase test member...\n');
+
+  const testEmail = 'test@naus.org.ng';
+  const testPassword = 'Test123!';
+  const testMembershipNumber = 'NAUS-2026001'; // Custom or test format
 
   try {
-    connection = await pool.getConnection();
-    console.log('✅ Connected to database\n');
+    // 1. Check if user already exists in Supabase Auth
+    const { data: existingUsers, error: listError } = await supabase.auth.admin.listUsers();
+    
+    if (listError) throw listError;
 
-    // Check if test member already exists
-    const [existingUser] = await connection.execute(
-      'SELECT * FROM users WHERE email = ?',
-      ['test@naus.org.ng']
-    );
+    const userExists = existingUsers.users.find(u => u.email === testEmail);
 
-    if (existingUser.length > 0) {
-      console.log('⚠️  Test member already exists!');
-      console.log('\n╔════════════════════════════════════════╗');
-      console.log('║       TEST MEMBER CREDENTIALS          ║');
-      console.log('╠════════════════════════════════════════╣');
-      console.log('║ Email:    test@naus.org.ng             ║');
-      console.log('║ Password: Test123!                     ║');
-      console.log('║ Number:   ' + existingUser[0].membershipNumber.padEnd(27) + '║');
-      console.log('╚════════════════════════════════════════╝\n');
-      console.log('Use these credentials to login to the member portal.\n');
+    if (userExists) {
+      console.log('⚠️  Test member already exists in Supabase Auth!');
+      printCredentials(testEmail, testPassword, testMembershipNumber);
       process.exit(0);
     }
 
-    // Generate membership number
-    const membershipNumber = await MemberModel.generateMembershipNumber();
-    console.log('Generated membership number:', membershipNumber);
+    // 2. Create user in Supabase Auth (Supabase handles password hashing automatically)
+    console.log('Creating user in Supabase Auth...');
+    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+      email: testEmail,
+      password: testPassword,
+      email_confirm: true // Automatically mark email as verified
+    });
 
-    // Hash password
-    const password = 'Test123!';
-    const hashedPassword = await bcrypt.hash(password, 10);
+    if (authError) {
+      throw new Error(`Auth creation failed: ${authError.message}`);
+    }
 
-    // Create member in members table
-    console.log('Creating member record...');
-    await connection.execute(`
-      INSERT INTO members (
-        membershipNumber, firstName, middleName, lastName, areaOfSpecialty,
-        phoneNumber, email, streetAddress, permanentAddress, mdcnRegistrationNumber,
-        yearQualifiedMBBS, additionalQualificationMDCN, yearQualifiedUrologist,
-        currentPractice, nextOfKinName, nextOfKinPhone, nextOfKinEmail,
-        fellowshipCollege, fwacs, fmcs, facs, frcs, others, qualificationYear,
-        additionalQualification, residencyTraining, foreignInstitution,
-        conferenceAttended, declaration, date, hasAccount, accountCreated, membershipType,
-        isActive
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [
-      membershipNumber,
-      'Test',
-      'Member',
-      'Account',
-      'General Urology',
-      '+2348012345678',
-      'test@naus.org.ng',
-      '123 Test Street, Lagos',
-      '123 Test Street, Lagos',
-      'MDCN/TEST/12345',
-      2015,
-      'Fellowship',
-      2020,
-      'Lagos University Teaching Hospital',
-      'Emergency Contact',
-      '+2348087654321',
-      'emergency@test.com',
-      'West African College of Surgeons',
-      1, 0, 0, 0, 0,
-      2020,
-      'FWACS',
-      'LUTH Urology',
-      'N/A',
-      'N/A',
-      'I declare this is a test account',
-      new Date(),
-      1, // hasAccount
-      new Date(), // accountCreated
-      'new',
-      1 // isActive
-    ]);
+    const userId = authData.user.id;
+    console.log('✅ Auth user created with ID:', userId);
 
-    // Create user account for authentication
-    console.log('Creating user authentication record...');
-    await connection.execute(`
-      INSERT INTO users (membershipNumber, email, password, firstName, lastName, role, isActive)
-      VALUES (?, ?, ?, ?, ?, 'member', 1)
-    `, [membershipNumber, 'test@naus.org.ng', hashedPassword, 'Test', 'Account']);
+    // 3. Create member record in your 'members' table
+    console.log('Creating member profile record...');
+    const { error: dbError } = await supabase
+      .from('members')
+      .insert([
+        {
+          id: userId, // Links to Supabase Auth ID
+          membershipnumber: testMembershipNumber,
+          firstname: 'Test',
+          middlename: 'Member',
+          lastname: 'Account',
+          areaofspecialty: 'General Urology',
+          phonenumber: '+2348012345678',
+          email: testEmail,
+          streetaddress: '123 Test Street, Lagos',
+          permanentaddress: '123 Test Street, Lagos',
+          mdcnregistrationnumber: 'MDCN/TEST/12345',
+          yearqualifiedmbbs: 2015,
+          additionalqualificationmdcn: 'Fellowship',
+          yearqualifiedurologist: 2020,
+          currentpractice: 'Lagos University Teaching Hospital',
+          nextofkinname: 'Emergency Contact',
+          nextofkinphone: '+2348087654321',
+          nextofkinemail: 'emergency@test.com',
+          fellowshipcollege: 'West African College of Surgeons',
+          fwacs: true,
+          fmcs: false,
+          facs: false,
+          frcs: false,
+          others: false,
+          qualificationyear: 2020,
+          additionalqualification: 'FWACS',
+          residencytraining: 'LUTH Urology',
+          foreigninstitution: 'N/A',
+          conferenceattended: 'N/A',
+          declaration: 'I declare this is a test account',
+          date: new Date().toISOString().split('T')[0],
+          membershiptype: 'new',
+          isactive: true
+        }
+      ]);
 
-    console.log('\n✅ Test member created successfully!\n');
-    console.log('╔════════════════════════════════════════╗');
-    console.log('║       TEST MEMBER CREDENTIALS          ║');
-    console.log('╠════════════════════════════════════════╣');
-    console.log('║ Email:    test@naus.org.ng             ║');
-    console.log('║ Password: Test123!                     ║');
-    console.log('║ Number:   ' + membershipNumber.padEnd(27) + '║');
-    console.log('╚════════════════════════════════════════╝');
-    console.log('\nYou can now login to the member portal with these credentials!\n');
-    console.log('Member Portal URL: http://localhost:3001/member-login\n');
+    if (dbError) {
+      throw new Error(`Database insert failed: ${dbError.message}`);
+    }
+
+    console.log('\n✅ Test member created successfully in Supabase!\n');
+    printCredentials(testEmail, testPassword, testMembershipNumber);
 
   } catch (err) {
     console.error('❌ Error creating test member:', err.message);
-    console.error('\nFull error:', err);
-    console.error('\nPossible issues:');
-    console.error('- Database not running (check MySQL)');
-    console.error('- Database credentials wrong (check .env file)');
-    console.error('- Tables not created (run: node create-database.js)');
     process.exit(1);
-  } finally {
-    if (connection) {
-      connection.release();
-    }
-    await pool.end();
-    process.exit(0);
   }
+}
+
+function printCredentials(email, password, membershipNumber) {
+  console.log('╔════════════════════════════════════════╗');
+  console.log('║       SUPABASE TEST CREDENTIALS        ║');
+  console.log('╠════════════════════════════════════════╣');
+  console.log(`║ Email:    ${email.padEnd(28)} ║`);
+  console.log(`║ Password: ${password.padEnd(28)} ║`);
+  console.log(`║ Number:   ${membershipNumber.padEnd(28)} ║`);
+  console.log('╚════════════════════════════════════════╝');
+  console.log('\nYou can now login using Supabase Auth in your backend app!\n');
 }
 
 createTestMember();
