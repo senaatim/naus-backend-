@@ -3,13 +3,21 @@ const multer = require('multer');
 const router = express.Router();
 const supabase = require('../config/supabase');
 
+// ---------- multer (memory storage, 5MB per file) ----------
+const ALLOWED_TYPES = [
+  'application/pdf',
+  'image/jpeg',
+  'image/png',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+];
+
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB per file
+  limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    const allowed = ['application/pdf', 'image/jpeg', 'image/png'];
-    if (!allowed.includes(file.mimetype)) {
-      return cb(new Error('Only PDF, JPG or PNG files are allowed'));
+    if (!ALLOWED_TYPES.includes(file.mimetype)) {
+      return cb(new Error('Only PDF, JPG, PNG or Word files are allowed'));
     }
     cb(null, true);
   }
@@ -22,7 +30,9 @@ const clean = (v) => {
   return s === '' ? null : s;
 };
 
-const toBool = (v) => v === true || v === 'true' || v === 'on' || v === '1' || v === 1;
+// Accepts true, 'true', 'on', '1', 1, 'yes'
+const toBool = (v) =>
+  v === true || ['true', 'on', '1', 'yes'].includes(String(v).trim().toLowerCase());
 
 const toInt = (v) => {
   const s = clean(v);
@@ -65,6 +75,9 @@ router.post(
       const body = req.body;
       const files = req.files;
 
+      console.log('FILES:', Object.keys(files || {}));
+      console.log('BODY:', Object.keys(body || {}));
+
       if (!files?.mbbsCertificate || !files?.fellowshipCertificate) {
         return res
           .status(400)
@@ -79,12 +92,14 @@ router.post(
       }
 
       // Block duplicate pending applications for the same email
-      const { data: existing } = await supabase
+      const { data: existing, error: existingError } = await supabase
         .from('applications')
         .select('id')
         .eq('email', email)
         .eq('status', 'pending')
         .limit(1);
+
+      if (existingError) throw existingError;
 
       if (existing && existing.length > 0) {
         return res
@@ -120,7 +135,8 @@ router.post(
         fmcs: toBool(body.fmcs),
         facs: toBool(body.facs),
         frcs: toBool(body.frcs),
-        others: clean(body.others),
+        // the form sends "true"/"false" for others; if your column is text, change toBool to clean
+        others: toBool(body.others),
         qualificationyear: toInt(body.qualificationYear),
         additionalqualification: clean(body.additionalQualification),
         residencytraining: clean(body.residencyTraining),
@@ -153,7 +169,7 @@ router.post(
   }
 );
 
-// Handle multer errors (file too large, wrong type) with a 400 instead of a 500
+// Multer errors (file too large, wrong type) return 400 instead of 500
 router.use((err, req, res, next) => {
   if (err instanceof multer.MulterError || err.message?.includes('allowed')) {
     return res.status(400).json({ message: err.message });
