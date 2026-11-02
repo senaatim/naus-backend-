@@ -1,182 +1,209 @@
 const express = require('express');
-const multer = require('multer');
-const cloudinary = require('cloudinary').v2;
 const router = express.Router();
-const supabase = require('../config/supabase');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const supabase = require('../config/supabase'); // Supabase client
+const EmailService = require('../services/emailService');
 
-// ---------- Cloudinary config ----------
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
-});
+// ADMIN LOGIN
+router.post('/admin/login', async (req, res) => {
+    const { email, password } = req.body;
 
-// ---------- multer (memory storage, 5MB per file) ----------
-const ALLOWED_TYPES = [
-  'application/pdf',
-  'image/jpeg',
-  'image/png',
-  'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-];
-
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    if (!ALLOWED_TYPES.includes(file.mimetype)) {
-      return cb(new Error('Only PDF, JPG, PNG or Word files are allowed'));
-    }
-    cb(null, true);
-  }
-});
-
-// ---------- helpers ----------
-const clean = (v) => {
-  if (v === undefined || v === null) return null;
-  const s = String(v).trim();
-  return s === '' ? null : s;
-};
-
-// Accepts true, 'true', 'on', '1', 1, 'yes'
-const toBool = (v) =>
-  v === true || ['true', 'on', '1', 'yes'].includes(String(v).trim().toLowerCase());
-
-const toInt = (v) => {
-  const s = clean(v);
-  if (s === null) return null;
-  const n = parseInt(s, 10);
-  return Number.isNaN(n) ? null : n;
-};
-
-const toDate = (v) => {
-  const s = clean(v);
-  if (!s) return null;
-  const d = new Date(s);
-  return Number.isNaN(d.getTime()) ? null : d.toISOString().split('T')[0];
-};
-
-// ---------- file upload (Cloudinary) ----------
-const uploadCertificate = (file) =>
-  new Promise((resolve, reject) => {
-    const stream = cloudinary.uploader.upload_stream(
-      { folder: 'naus-certificates', resource_type: 'auto' },
-      (err, result) => (err ? reject(err) : resolve(result.secure_url))
-    );
-    stream.end(file.buffer);
-  });
-
-// ---------- route ----------
-router.post(
-  '/',
-  upload.fields([
-    { name: 'mbbsCertificate', maxCount: 1 },
-    { name: 'fellowshipCertificate', maxCount: 1 }
-  ]),
-  async (req, res) => {
     try {
-      const body = req.body;
-      const files = req.files;
+        const { data: admin, error } = await supabase
+            .from('admins')
+            .select('*')
+            .eq('email', email)
+            .maybeSingle();
 
-      if (!files?.mbbsCertificate || !files?.fellowshipCertificate) {
-        return res
-          .status(400)
-          .json({ message: 'Both MBBS and Fellowship certificates are required' });
-      }
+        if (error || !admin) {
+            return res.status(401).json({ message: "Invalid email or password" });
+        }
 
-      const email = clean(body.email)?.toLowerCase();
-      if (!email || !clean(body.firstName) || !clean(body.lastName)) {
-        return res
-          .status(400)
-          .json({ message: 'First name, last name and email are required' });
-      }
+        if (!admin.isactive && !admin.isActive) {
+            return res.status(403).json({ message: "Account is inactive. Contact Super Admin." });
+        }
 
-      // Block duplicate pending applications for the same email
-      const { data: existing, error: existingError } = await supabase
-        .from('applications')
-        .select('id')
-        .eq('email', email)
-        .eq('status', 'pending')
-        .limit(1);
+        const isMatch = await bcrypt.compare(password, admin.password);
+        if (!isMatch) {
+            return res.status(401).json({ message: "Invalid email or password" });
+        }
 
-      if (existingError) throw existingError;
+        const token = jwt.sign(
+            { id: admin.id, role: admin.role },
+            process.env.JWT_SECRET || 'fallback_secret_do_not_use_in_production',
+            { expiresIn: '1d' }
+        );
 
-      if (existing && existing.length > 0) {
-        return res
-          .status(409)
-          .json({ message: 'An application with this email is already pending' });
-      }
+        res.json({
+            status: 'success',
+            token,
+            admin: {
+                id: admin.id,
+                name: admin.name,
+                email: admin.email,
+                role: admin.role
+            }
+        });
 
-      const [mbbsUrl, fellowshipUrl] = await Promise.all([
-        uploadCertificate(files.mbbsCertificate[0]),
-        uploadCertificate(files.fellowshipCertificate[0])
-      ]);
-
-      const record = {
-        firstname: clean(body.firstName),
-        middlename: clean(body.middleName),
-        lastname: clean(body.lastName),
-        email,
-        phonenumber: clean(body.phoneNumber),
-        areaofspecialty: clean(body.areaOfSpecialty),
-        streetaddress: clean(body.streetAddress),
-        permanentaddress: clean(body.permanentAddress),
-
-        mdcnregistrationnumber: clean(body.mdcnRegistrationNumber),
-        yearqualifiedmbbs: toInt(body.yearQualifiedMBBS),
-        additionalqualificationmdcn: clean(body.additionalQualificationMDCN),
-        yearqualifiedurologist: toInt(body.yearQualifiedUrologist),
-        currentpractice: clean(body.currentPractice) || 'Not specified',
-
-        nextofkinname: clean(body.nextOfKinName),
-        nextofkinphone: clean(body.nextOfKinPhone),
-        nextofkinemail: clean(body.nextOfKinEmail),
-
-        fellowshipcollege: clean(body.fellowshipCollege),
-        fwacs: toBool(body.fwacs),
-        fmcs: toBool(body.fmcs),
-        facs: toBool(body.facs),
-        frcs: toBool(body.frcs),
-        // if your "others" column is text, change toBool to clean
-        others: toBool(body.others),
-        qualificationyear: toInt(body.qualificationYear),
-        additionalqualification: clean(body.additionalQualification),
-        residencytraining: clean(body.residencyTraining),
-        foreigninstitution: clean(body.foreignInstitution),
-        conferenceattended: clean(body.conferenceAttended),
-
-        declaration: toBool(body.declaration),
-        date: toDate(body.date),
-
-        mbbscertificate: mbbsUrl,
-        fellowshipcertificate: fellowshipUrl,
-        status: 'pending'
-      };
-
-      const { data, error } = await supabase
-        .from('applications')
-        .insert([record])
-        .select();
-
-      if (error) throw error;
-
-      res.status(201).json({ message: 'Application submitted successfully', data });
-    } catch (err) {
-      console.error('Application submission error:', err.message, err.details || '');
-      res.status(500).json({
-        message: 'Failed to submit application.',
-        error: err.message
-      });
+    } catch (error) {
+        console.error('Admin Login Error:', error);
+        res.status(500).json({ message: "Internal server error" });
     }
-  }
-);
+});
 
-// Multer errors (file too large, wrong type) return 400 instead of 500
-router.use((err, req, res, next) => {
-  if (err instanceof multer.MulterError || err.message?.includes('allowed')) {
-    return res.status(400).json({ message: err.message });
-  }
-  next(err);
+// GET ALL APPLICATIONS (Mapped from lowercase DB columns to camelCase)
+router.get('/admin/applications', async (req, res) => {
+    try {
+        const { data: apps, error } = await supabase
+            .from('applications')
+            .select('*')
+            .order('createdat', { ascending: false });
+
+        if (error) throw error;
+
+        const formattedApps = (apps || []).map(app => ({
+            ...app,
+            firstName: app.firstname || app.firstName,
+            lastName: app.lastname || app.lastName,
+            membershipNumber: app.membershipnumber || app.membershipNumber,
+            phoneNumber: app.phonenumber || app.phoneNumber,
+            areaOfSpecialty: app.areaofspecialty || app.areaOfSpecialty
+        }));
+
+        res.json(formattedApps);
+    } catch (error) {
+        console.error('Error fetching applications:', error);
+        res.status(500).json({ message: "Error fetching applications" });
+    }
+});
+
+// GET SINGLE APPLICATION BY ID (Mapped from lowercase DB columns to camelCase)
+router.get('/admin/applications/:id', async (req, res) => {
+    try {
+        const { data: app, error } = await supabase
+            .from('applications')
+            .select('*')
+            .eq('id', req.params.id)
+            .maybeSingle();
+
+        if (error || !app) {
+            return res.status(404).json({ message: "Application not found" });
+        }
+
+        const formattedApp = {
+            id: app.id,
+            status: app.status,
+            firstName: app.firstname || app.firstName,
+            middleName: app.middlename || app.middleName,
+            lastName: app.lastname || app.lastName,
+            email: app.email,
+            phoneNumber: app.phonenumber || app.phoneNumber,
+            areaOfSpecialty: app.areaofspecialty || app.areaOfSpecialty,
+            mdcnRegistrationNumber: app.mdcnregistrationnumber || app.mdcnRegistrationNumber,
+            yearQualifiedMBBS: app.yearqualifiedmbbs || app.yearQualifiedMBBS,
+            streetAddress: app.streetaddress || app.streetAddress,
+            permanentAddress: app.permanentaddress || app.permanentAddress,
+            fellowshipCollege: app.fellowshipcollege || app.fellowshipCollege,
+            fwacs: app.fwacs,
+            fmcs: app.fmcs,
+            facs: app.facs,
+            frcs: app.frcs,
+            others: app.others,
+            qualificationYear: app.qualificationyear || app.qualificationYear,
+            additionalQualification: app.additionalqualification || app.additionalQualification,
+            residencyTraining: app.residencytraining || app.residencyTraining,
+            foreignInstitution: app.foreigninstitution || app.foreignInstitution,
+            mbbsCertificate: app.mbbscertificate || app.mbbsCertificate,
+            fellowshipCertificate: app.fellowshipcertificate || app.fellowshipCertificate,
+            documents: app.documents,
+            membershipNumber: app.membershipnumber || app.membershipNumber
+        };
+
+        res.json(formattedApp);
+    } catch (error) {
+        console.error('Error fetching application:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// UPDATE APPLICATION STATUS
+router.patch('/admin/applications/:id', async (req, res) => {
+    try {
+        const { status } = req.body;
+
+        if (!['pending', 'approved', 'rejected', 'under_review'].includes(status)) {
+            return res.status(400).json({ message: "Invalid status value" });
+        }
+
+        const { data: app, error: fetchError } = await supabase
+            .from('applications')
+            .select('*')
+            .eq('id', req.params.id)
+            .maybeSingle();
+
+        if (fetchError || !app) {
+            return res.status(404).json({ message: "Application not found" });
+        }
+
+        const oldStatus = app.status;
+
+        // Update application status
+        await supabase
+            .from('applications')
+            .update({ status })
+            .eq('id', req.params.id);
+
+        if (status === 'approved' && oldStatus !== 'approved') {
+            const membershipNumber = `NAUS-${Math.floor(100000 + Math.random() * 900000)}`;
+            const tempPassword = Math.random().toString(36).slice(-8) + 'Temp!';
+            const hashedPassword = await bcrypt.hash(tempPassword, 10);
+
+            // Create Supabase Auth user
+            const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+                email: app.email,
+                password: tempPassword,
+                email_confirm: true
+            });
+
+            if (authError) {
+                console.error('Auth User Creation Error:', authError);
+            }
+
+            const userId = authData?.user?.id;
+
+            // Insert into members table
+            await supabase.from('members').insert([{
+                id: userId,
+                membershipnumber: membershipNumber,
+                firstname: app.firstname || app.firstName,
+                lastname: app.lastname || app.lastName,
+                email: app.email,
+                membershiptype: 'new',
+                hasaccount: true,
+                isactive: true
+            }]);
+
+            // Update application with membership number
+            await supabase
+                .from('applications')
+                .update({ membershipnumber: membershipNumber })
+                .eq('id', req.params.id);
+
+            await EmailService.sendApprovalEmail(app.email, membershipNumber, tempPassword);
+
+            return res.json({
+                message: "Application approved successfully and email sent",
+                application: { id: app.id, status, membershipNumber },
+                emailSent: true
+            });
+        }
+
+        res.json({ message: "Application status updated successfully", application: { id: app.id, status } });
+    } catch (error) {
+        console.error('Error updating application status:', error);
+        res.status(500).json({ error: error.message });
+    }
 });
 
 module.exports = router;
