@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const supabase = require('../config/supabase');
 
-// GET all members (supports pagination, search, and filters for the admin panel)
+// GET all members (supports pagination, search, and filters with camelCase mapping)
 router.get('/', async (req, res) => {
     try {
         const page = parseInt(req.query.page) || 1;
@@ -50,10 +50,27 @@ router.get('/', async (req, res) => {
             return res.status(500).json({ message: 'Failed to retrieve members.' });
         }
 
+        // Map lowercase database rows to camelCase for frontend tables
+        const formattedMembers = (members || []).map(m => ({
+            ...m,
+            id: m.id,
+            membershipNumber: m.membershipnumber || m.membershipNumber || '',
+            firstName: m.firstname || m.firstName || '',
+            middleName: m.middlename || m.middleName || '',
+            lastName: m.lastname || m.lastName || '',
+            email: m.email || '',
+            phoneNumber: m.phonenumber || m.phoneNumber || m.phone || '',
+            areaOfSpecialty: m.areaofspecialty || m.areaOfSpecialty || m.specialty || '',
+            membershipType: m.membershiptype || m.membershipType || 'new',
+            isActive: m.isactive !== undefined ? m.isactive : true,
+            profilePhoto: m.profilephoto || m.profilePhoto || '',
+            createdAt: m.createdat || m.createdAt || ''
+        }));
+
         const totalPages = Math.ceil((count || 0) / limit);
 
         return res.json({
-            members: members || [],
+            members: formattedMembers,
             totalPages: totalPages > 0 ? totalPages : 1,
             totalMembers: count || 0,
             currentPage: page
@@ -65,21 +82,52 @@ router.get('/', async (req, res) => {
     }
 });
 
-// GET single member by ID
+// GET single member by ID (mapped to camelCase)
 router.get('/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const { data: member, error } = await supabase
+        const { data: m, error } = await supabase
             .from('members')
             .select('*')
             .eq('id', id)
             .maybeSingle();
 
-        if (error || !member) {
+        if (error || !m) {
             return res.status(404).json({ message: 'Member not found.' });
         }
 
-        return res.json({ member });
+        const formattedMember = {
+            id: m.id,
+            membershipNumber: m.membershipnumber || m.membershipNumber || '',
+            firstName: m.firstname || m.firstName || '',
+            middleName: m.middlename || m.middleName || '',
+            lastName: m.lastname || m.lastName || '',
+            email: m.email || '',
+            phoneNumber: m.phonenumber || m.phoneNumber || m.phone || '',
+            areaOfSpecialty: m.areaofspecialty || m.areaOfSpecialty || m.specialty || '',
+            streetAddress: m.streetaddress || m.streetAddress || '',
+            permanentAddress: m.permanentaddress || m.permanentAddress || '',
+            currentPractice: m.currentpractice || m.currentPractice || '',
+            nextOfKinName: m.nextofkinname || m.nextOfKinName || '',
+            nextOfKinPhone: m.nextofkinphone || m.nextOfKinPhone || '',
+            nextOfKinEmail: m.nextofkinemail || m.nextOfKinEmail || '',
+            mdcnRegistrationNumber: m.mdcnregistrationnumber || m.mdcnRegistrationNumber || '',
+            yearQualifiedMBBS: m.yearqualifiedmbbs || m.yearQualifiedMBBS || '',
+            fellowshipCollege: m.fellowshipcollege || m.fellowshipCollege || '',
+            fwacs: m.fwacs || false,
+            fmcs: m.fmcs || false,
+            facs: m.facs || false,
+            frcs: m.frcs || false,
+            others: m.others || false,
+            membershipType: m.membershiptype || m.membershipType || 'new',
+            isActive: m.isactive !== undefined ? m.isactive : true,
+            profilePhoto: m.profilephoto || m.profilePhoto || '',
+            mbbsCertificate: m.mbbscertificate || m.mbbsCertificate || '',
+            fellowshipCertificate: m.fellowshipcertificate || m.fellowshipCertificate || '',
+            createdAt: m.createdat || m.createdAt || ''
+        };
+
+        return res.json({ member: formattedMember });
     } catch (err) {
         console.error('Get member by ID error:', err);
         return res.status(500).json({ message: 'Internal server error.' });
@@ -93,16 +141,16 @@ router.put('/:id', async (req, res) => {
         const body = req.body;
 
         const updateData = {};
-        if (body.firstName || body.first_name) updateData.firstname = body.firstName || body.first_name;
-        if (body.middleName || body.middle_name) updateData.middlename = body.middleName || body.middle_name;
-        if (body.lastName || body.last_name) updateData.lastname = body.lastName || body.last_name;
-        if (body.email) updateData.email = body.email;
-        if (body.phoneNumber || body.phone_number) updateData.phonenumber = body.phoneNumber || body.phone_number;
-        if (body.areaOfSpecialty || body.area_of_specialty) updateData.areaofspecialty = body.areaOfSpecialty || body.area_of_specialty;
-        if (body.streetAddress || body.street_address) updateData.streetaddress = body.streetAddress || body.street_address;
-        if (body.permanentAddress || body.permanent_address) updateData.permanentaddress = body.permanentAddress || body.permanent_address;
-        if (body.currentPractice || body.current_practice) updateData.currentpractice = body.currentPractice || body.current_practice;
-        if (body.membershipType || body.membership_type) updateData.membershiptype = body.membershipType || body.membership_type;
+        if (body.firstName !== undefined || body.first_name !== undefined) updateData.firstname = body.firstName || body.first_name;
+        if (body.middleName !== undefined || body.middle_name !== undefined) updateData.middlename = body.middleName || body.middle_name;
+        if (body.lastName !== undefined || body.last_name !== undefined) updateData.lastname = body.lastName || body.last_name;
+        if (body.email !== undefined) updateData.email = body.email;
+        if (body.phoneNumber !== undefined || body.phone_number !== undefined) updateData.phonenumber = body.phoneNumber || body.phone_number;
+        if (body.areaOfSpecialty !== undefined || body.area_of_specialty !== undefined) updateData.areaofspecialty = body.areaOfSpecialty || body.area_of_specialty;
+        if (body.streetAddress !== undefined || body.street_address !== undefined) updateData.streetaddress = body.streetAddress || body.street_address;
+        if (body.permanentAddress !== undefined || body.permanent_address !== undefined) updateData.permanentaddress = body.permanentAddress || body.permanent_address;
+        if (body.currentPractice !== undefined || body.current_practice !== undefined) updateData.currentpractice = body.currentPractice || body.current_practice;
+        if (body.membershipType !== undefined || body.membership_type !== undefined) updateData.membershiptype = body.membershipType || body.membership_type;
         
         updateData.updatedat = new Date();
 
