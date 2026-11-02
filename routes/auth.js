@@ -166,4 +166,45 @@ router.post('/reset-password', async (req, res) => {
     }
 });
 
+// MEMBER LOGIN
+router.post('/member-login', async (req, res) => {
+    const { email, password } = req.body;
+
+    try {
+        if (!email || !password) {
+            return res.status(400).json({ message: "Email and password are required." });
+        }
+
+        const cleanEmail = email.toLowerCase().trim();
+
+        // Sign in using Supabase Auth
+        const { data, error } = await supabase.auth.signInWithPassword({
+            email: cleanEmail,
+            password: password,
+        });
+
+        if (error) {
+            return res.status(401).json({ message: 'Invalid email or password.' });
+        }
+
+        // Fetch extra member details from your custom table
+        const { data: memberData } = await supabase
+            .from('members')
+            .select('*')
+            .eq('email', cleanEmail)
+            .single();
+
+        return res.json({
+            status: 'success',
+            message: 'Login successful',
+            session: data.session,
+            member: memberData || data.user
+        });
+
+    } catch (error) {
+        console.error('Login Error:', error);
+        res.status(500).json({ message: 'Internal server error.' });
+    }
+});
+
 module.exports = router;
