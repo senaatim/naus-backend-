@@ -1,7 +1,5 @@
 const cloudinary = require('cloudinary').v2;
 const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -9,54 +7,114 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
-// Use standard local disk storage temporarily, then we can pipe or handle it
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadDir = 'uploads/temp';
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + '-' + file.originalname);
+// ---------- multer storage engine that streams straight to Cloudinary ----------
+// After upload, req.file.path is the permanent https URL (nothing is written to disk).
+class CloudinaryStorage {
+  constructor(getParams) {
+    this.getParams = getParams;
   }
-});
 
-const upload = multer({ 
-  storage: storage,
-  limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
-});
+  _handleFile(req, file, cb) {
+    const params = this.getParams(req, file);
 
-// Helper middlewares matching your existing code structure
-const uploadPhoto = upload;
-const uploadCertificate = upload;
+    const uploadStream = cloudinary.uploader.upload_stream(params, (err, result) => {
+      if (err) return cb(err);
+      cb(null, {
+        path: result.secure_url,
+        filename: result.public_id,
+        size: result.bytes
+      });
+    });
 
-const getPublicIdFromUrl = (url) => {
-  try {
-    if (!url) return null;
-    const parts = url.split('/');
-    const filenameWithExtension = parts[parts.length - 1];
-    const publicId = filenameWithExtension.split('.')[0];
-    const folder = parts[parts.length - 2];
-    return folder && folder !== 'upload' ? `${folder}/${publicId}` : publicId;
-  } catch (e) {
-    return null;
+    file.stream.on('error', cb);
+    file.stream.pipe(uploadStream);
   }
+
+  _removeFile(req, file, cb) {
+    cloudinary.uploader.destroy(file.filename, { resource_type: 'image' }, () => cb(null));
+  }
+}
+
+const makeFilter = (allowed, message) => (req, file, cb) => {
+  if (!allowed.includes(file.mimetype)) return cb(new Error(message));
+  cb(null, true);
 };
 
-const deleteFromCloudinary = async (publicId, resourceType = 'image') => {
+// ---------- profile photos ----------
+const uploadPhoto = multer({
+  storage: new CloudinaryStorage(() => ({
+    folder: 'naus-profile-photos',
+    resource_type: 'image',
+    transformation: [{ width: 500, height: 500, crop: 'limit' }]
+  })),
+  limits: { fileSize: 2 * 1024 * 1024 },
+  fileFilter: makeFilter(
+    ['image/jpeg', 'image/png', 'image/webp'],
+    'Only JPG, PNG or WebP images are allowed'
+  )
+});
+
+// ---------- certificates ----------
+const uploadCertificate = multer({
+  storage: new CloudinaryStorage(() => ({
+    folder: 'naus-certificates',
+    resource_type: 'auto'
+  })),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: makeFilter(
+    ['application/pdf', 'image/jpeg', 'image/png'],
+    'Only PDF, JPG or PNG files are allowed'
+  )
+});
+
+// ---------- helpers ----------
+// https://res.cloudinary.com/<cloud>/<type>/upload/v123/folder/name.ext  ->  folder/name
+const getPublicIdFromUrl = (url) => {
+  if (!url || typeof url !== 'string' || !url.includes('res.cloudinary.com')) return null;
+
+  const match = url.split('?')[0].match(/\/(image|raw|video)\/upload\/(.+)$/);
+  if (!match) return null;
+
+  const resourceType = match[1];
+  let parts = match[2].split('/');
+
+  const versionIndex = parts.findIndex((p) => /^v\d+$/.test(p));
+  if (versionIndex !== -1) parts = parts.slice(versionIndex + 1);
+
+  let publicId = parts.join('/');
   try {
-    await cloudinary.uploader.destroy(publicId, { resource_type: resourceType });
-  } catch (err) {
-    console.error('Error deleting from Cloudinary:', err);
+    publicId = decodeURIComponent(publicId);
+  } catch (e) {
+    // keep as is
   }
+
+  // image public ids have no extension; raw ones keep it
+  if (resourceType !== 'raw') publicId = publicId.replace(/\.[a-zA-Z0-9]+$/, '');
+
+  return publicId || null;
+};
+
+// Tries the given resource type first, then the others. Never throws.
+const deleteFromCloudinary = async (publicId, resourceType = 'image') => {
+  if (!publicId) return null;
+
+  const types = [resourceType, ...['image', 'raw', 'video'].filter((t) => t !== resourceType)];
+
+  for (const type of types) {
+    try {
+      const result = await cloudinary.uploader.destroy(publicId, { resource_type: type });
+      if (result && result.result === 'ok') return result;
+    } catch (err) {
+      console.error(`Cloudinary delete failed (${type}):`, err.message);
+    }
+  }
+  return null;
 };
 
 module.exports = {
+  cloudinary,
   uploadPhoto,
   uploadCertificate,
   deleteFromCloudinary,
-  getPublicIdFromUrl,
-  cloudinary
+  getPublicIdFromUrl
 };
