@@ -119,21 +119,34 @@ router.post('/reset-password', async (req, res) => {
             return res.status(500).json({ message: 'Internal server error.' });
         }
 
-        const authUser = listUsersData.users.find(u => u.email.toLowerCase() === cleanEmail);
+        let authUser = listUsersData.users.find(u => u.email.toLowerCase() === cleanEmail);
 
         if (!authUser) {
-            return res.status(404).json({ message: 'User account not found in authentication system.' });
+            // Bulk-imported user not in Supabase Auth yet — create them automatically!
+            const { data: createdData, error: createError } = await supabase.auth.admin.createUser({
+                email: cleanEmail,
+                password: newPassword,
+                email_confirm: true
+            });
+
+            if (createError) {
+                console.error('Auth user creation error:', createError);
+                return res.status(500).json({ message: 'Failed to initialize user account.' });
+            }
+            authUser = createdData.user;
+        } else {
+            // User exists — update their password directly
+            const { error: updateAuthError } = await supabase.auth.admin.updateUserById(authUser.id, {
+                password: newPassword
+            });
+
+            if (updateAuthError) {
+                console.error('Auth password update error:', updateAuthError);
+                return res.status(500).json({ message: 'Failed to update password.' });
+            }
         }
 
-        const { error: updateAuthError } = await supabase.auth.admin.updateUserById(authUser.id, {
-            password: newPassword
-        });
-
-        if (updateAuthError) {
-            console.error('Auth password update error:', updateAuthError);
-            return res.status(500).json({ message: 'Failed to update password.' });
-        }
-
+        // Clear out the reset token from the members table
         await supabase
             .from('members')
             .update({ 
