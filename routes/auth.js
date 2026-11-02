@@ -6,49 +6,7 @@ const supabase = require('../config/supabase');
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-// MEMBER LOGIN
-router.post('/member-login', async (req, res) => {
-    const { email, password } = req.body;
-
-    try {
-        if (!email || !password) {
-            return res.status(400).json({ message: "Email and password are required" });
-        }
-
-        // Use Supabase Auth sign-in
-        const { data, error } = await supabase.auth.signInWithPassword({
-            email,
-            password
-        });
-
-        if (error) {
-            return res.status(401).json({ message: error.message });
-        }
-
-        // Fetch member profile details
-        const { data: memberProfile } = await supabase
-            .from('members')
-            .select('*')
-            .eq('id', data.user.id)
-            .maybeSingle();
-
-        res.json({
-            status: 'success',
-            token: data.session.access_token,
-            user: {
-                id: data.user.id,
-                email: data.user.email,
-                ...memberProfile
-            }
-        });
-
-    } catch (error) {
-        console.error('Member Login Error:', error);
-        res.status(500).json({ message: "Internal server error" });
-    }
-});
-
-// FORGOT PASSWORD (Using Resend Alone)
+// FORGOT PASSWORD
 router.post('/forgot-password', async (req, res) => {
     const { email } = req.body;
 
@@ -59,7 +17,6 @@ router.post('/forgot-password', async (req, res) => {
 
         const cleanEmail = email.toLowerCase().trim();
 
-        // 1. Check if member exists in your members table
         const { data: members, error: dbError } = await supabase
             .from('members')
             .select('*')
@@ -70,7 +27,6 @@ router.post('/forgot-password', async (req, res) => {
             console.error('Database lookup error:', dbError);
         }
 
-        // Always return success to prevent email enumeration (security best practice)
         if (!members || members.length === 0) {
             return res.json({
                 status: 'success',
@@ -80,11 +36,9 @@ router.post('/forgot-password', async (req, res) => {
 
         const member = members[0];
 
-        // 2. Generate secure token and 1-hour expiration
         const resetToken = crypto.randomBytes(32).toString('hex');
         const tokenExpiry = new Date(Date.now() + 3600000).toISOString();
 
-        // 3. Save token to the members table
         const { error: updateError } = await supabase
             .from('members')
             .update({ 
@@ -98,13 +52,11 @@ router.post('/forgot-password', async (req, res) => {
             return res.status(500).json({ message: "Internal server error" });
         }
 
-        // 4. Construct frontend reset link
         const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
         const resetLink = `${frontendUrl}/reset-password?token=${resetToken}&email=${encodeURIComponent(cleanEmail)}`;
 
-        // 5. Send email via Resend alone
         const { error: resendError } = await resend.emails.send({
-            from: 'NAUS Urology <noreply@nausurology.org>', // Make sure this domain is verified in Resend
+            from: 'NAUS Urology <noreply@nausurology.org>',
             to: [cleanEmail],
             subject: 'Reset Your Password - NAUS',
             html: `
@@ -130,6 +82,74 @@ router.post('/forgot-password', async (req, res) => {
     } catch (error) {
         console.error('Forgot Password Error:', error);
         res.status(500).json({ message: "Internal server error" });
+    }
+});
+
+// RESET PASSWORD
+router.post('/reset-password', async (req, res) => {
+    const { email, token, newPassword } = req.body;
+
+    try {
+        if (!email || !token || !newPassword) {
+            return res.status(400).json({ message: "All fields are required." });
+        }
+
+        const cleanEmail = email.toLowerCase().trim();
+
+        const { data: members, error: fetchError } = await supabase
+            .from('members')
+            .select('*')
+            .eq('email', cleanEmail)
+            .limit(1);
+
+        if (fetchError || !members || members.length === 0) {
+            return res.status(400).json({ message: 'Invalid or expired reset token.' });
+        }
+
+        const member = members[0];
+
+        if (member.reset_token !== token || !member.reset_token_expiry || new Date() > new Date(member.reset_token_expiry)) {
+            return res.status(400).json({ message: 'Reset link is invalid or has expired.' });
+        }
+
+        const { data: listUsersData, error: listError } = await supabase.auth.admin.listUsers();
+        
+        if (listError) {
+            console.error('Error listing users:', listError);
+            return res.status(500).json({ message: 'Internal server error.' });
+        }
+
+        const authUser = listUsersData.users.find(u => u.email.toLowerCase() === cleanEmail);
+
+        if (!authUser) {
+            return res.status(404).json({ message: 'User account not found in authentication system.' });
+        }
+
+        const { error: updateAuthError } = await supabase.auth.admin.updateUserById(authUser.id, {
+            password: newPassword
+        });
+
+        if (updateAuthError) {
+            console.error('Auth password update error:', updateAuthError);
+            return res.status(500).json({ message: 'Failed to update password.' });
+        }
+
+        await supabase
+            .from('members')
+            .update({ 
+                reset_token: null, 
+                reset_token_expiry: null 
+            })
+            .eq('email', cleanEmail);
+
+        return res.json({
+            status: 'success',
+            message: 'Password has been successfully reset. You can now log in.'
+        });
+
+    } catch (error) {
+        console.error('Reset Password Error:', error);
+        res.status(500).json({ message: 'Internal server error.' });
     }
 });
 
