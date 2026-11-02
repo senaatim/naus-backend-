@@ -52,7 +52,7 @@ router.post('/admin/login', async (req, res) => {
     }
 });
 
-// GET ALL APPLICATIONS (Mapped from lowercase DB columns to camelCase)
+// GET ALL APPLICATIONS (Mapped fully for list view table)
 router.get('/admin/applications', async (req, res) => {
     try {
         const { data: apps, error } = await supabase
@@ -62,13 +62,17 @@ router.get('/admin/applications', async (req, res) => {
 
         if (error) throw error;
 
+        // Map every application item so list tables never show "undefined"
         const formattedApps = (apps || []).map(app => ({
             ...app,
-            firstName: app.firstname || app.firstName,
-            lastName: app.lastname || app.lastName,
-            membershipNumber: app.membershipnumber || app.membershipNumber,
-            phoneNumber: app.phonenumber || app.phoneNumber,
-            areaOfSpecialty: app.areaofspecialty || app.areaOfSpecialty
+            firstName: app.firstname || app.firstName || '',
+            middleName: app.middlename || app.middleName || '',
+            lastName: app.lastname || app.lastName || '',
+            email: app.email || '',
+            phoneNumber: app.phonenumber || app.phoneNumber || app.phone || '',
+            areaOfSpecialty: app.areaofspecialty || app.areaOfSpecialty || app.specialty || '',
+            status: app.status || 'pending',
+            membershipNumber: app.membershipnumber || app.membershipNumber || ''
         }));
 
         res.json(formattedApps);
@@ -78,7 +82,7 @@ router.get('/admin/applications', async (req, res) => {
     }
 });
 
-// GET SINGLE APPLICATION BY ID (Mapped from lowercase DB columns to camelCase)
+// GET SINGLE APPLICATION BY ID (Fully mapped for detailed view)
 router.get('/admin/applications/:id', async (req, res) => {
     try {
         const { data: app, error } = await supabase
@@ -94,30 +98,30 @@ router.get('/admin/applications/:id', async (req, res) => {
         const formattedApp = {
             id: app.id,
             status: app.status,
-            firstName: app.firstname || app.firstName,
-            middleName: app.middlename || app.middleName,
-            lastName: app.lastname || app.lastName,
-            email: app.email,
-            phoneNumber: app.phonenumber || app.phoneNumber,
-            areaOfSpecialty: app.areaofspecialty || app.areaOfSpecialty,
-            mdcnRegistrationNumber: app.mdcnregistrationnumber || app.mdcnRegistrationNumber,
-            yearQualifiedMBBS: app.yearqualifiedmbbs || app.yearQualifiedMBBS,
-            streetAddress: app.streetaddress || app.streetAddress,
-            permanentAddress: app.permanentaddress || app.permanentAddress,
-            fellowshipCollege: app.fellowshipcollege || app.fellowshipCollege,
-            fwacs: app.fwacs,
-            fmcs: app.fmcs,
-            facs: app.facs,
-            frcs: app.frcs,
-            others: app.others,
-            qualificationYear: app.qualificationyear || app.qualificationYear,
-            additionalQualification: app.additionalqualification || app.additionalQualification,
-            residencyTraining: app.residencytraining || app.residencyTraining,
-            foreignInstitution: app.foreigninstitution || app.foreignInstitution,
-            mbbsCertificate: app.mbbscertificate || app.mbbsCertificate,
-            fellowshipCertificate: app.fellowshipcertificate || app.fellowshipCertificate,
-            documents: app.documents,
-            membershipNumber: app.membershipnumber || app.membershipNumber
+            firstName: app.firstname || app.firstName || '',
+            middleName: app.middlename || app.middleName || '',
+            lastName: app.lastname || app.lastName || '',
+            email: app.email || '',
+            phoneNumber: app.phonenumber || app.phoneNumber || app.phone || '',
+            areaOfSpecialty: app.areaofspecialty || app.areaOfSpecialty || app.specialty || '',
+            mdcnRegistrationNumber: app.mdcnregistrationnumber || app.mdcnRegistrationNumber || '',
+            yearQualifiedMBBS: app.yearqualifiedmbbs || app.yearQualifiedMBBS || '',
+            streetAddress: app.streetaddress || app.streetAddress || '',
+            permanentAddress: app.permanentaddress || app.permanentAddress || '',
+            fellowshipCollege: app.fellowshipcollege || app.fellowshipCollege || '',
+            fwacs: app.fwacs || false,
+            fmcs: app.fmcs || false,
+            facs: app.facs || false,
+            frcs: app.frcs || false,
+            others: app.others || false,
+            qualificationYear: app.qualificationyear || app.qualificationYear || '',
+            additionalQualification: app.additionalqualification || app.additionalQualification || '',
+            residencyTraining: app.residencytraining || app.residencyTraining || '',
+            foreignInstitution: app.foreigninstitution || app.foreignInstitution || '',
+            mbbsCertificate: app.mbbscertificate || app.mbbsCertificate || '',
+            fellowshipCertificate: app.fellowshipcertificate || app.fellowshipCertificate || '',
+            documents: app.documents || [],
+            membershipNumber: app.membershipnumber || app.membershipNumber || ''
         };
 
         res.json(formattedApp);
@@ -157,7 +161,6 @@ router.patch('/admin/applications/:id', async (req, res) => {
         if (status === 'approved' && oldStatus !== 'approved') {
             const membershipNumber = `NAUS-${Math.floor(100000 + Math.random() * 900000)}`;
             const tempPassword = Math.random().toString(36).slice(-8) + 'Temp!';
-            const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
             // Create Supabase Auth user
             const { data: authData, error: authError } = await supabase.auth.admin.createUser({
