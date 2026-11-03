@@ -62,8 +62,8 @@ class EmailService {
         <div style="margin: 30px 0; text-align: center;">
           <table border="0" cellspacing="0" cellpadding="0" style="margin: 0 auto;">
             <tr>
-              <td align="center" bgcolor="#28a745" style="border-radius: 5px;">
-                <a href="${frontendUrl}/member-login" target="_blank" style="font-size: 16px; font-family: Helvetica, Arial, sans-serif; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 5px; border: 1px solid #28a745; display: inline-block; font-weight: bold;">
+              <td align="center" bgcolor="#28a745" style="border-radius: 5px; padding: 12px 24px;">
+                <a href="${frontendUrl}/member-login" target="_blank" style="font-size: 16px; font-family: Helvetica, Arial, sans-serif; color: #ffffff; text-decoration: none; display: inline-block; font-weight: bold;">
                   Login to Your Account
                 </a>
               </td>
@@ -107,8 +107,8 @@ class EmailService {
         <div style="margin: 30px 0; text-align: center;">
           <table border="0" cellspacing="0" cellpadding="0" style="margin: 0 auto;">
             <tr>
-              <td align="center" bgcolor="#007bff" style="border-radius: 5px;">
-                <a href="${loginUrl}/member-login" target="_blank" style="font-size: 16px; font-family: Helvetica, Arial, sans-serif; color: #ffffff; text-decoration: none; padding: 12px 30px; border-radius: 5px; border: 1px solid #007bff; display: inline-block; font-weight: bold;">
+              <td align="center" bgcolor="#007bff" style="border-radius: 5px; padding: 12px 30px;">
+                <a href="${loginUrl}/member-login" target="_blank" style="font-size: 16px; font-family: Helvetica, Arial, sans-serif; color: #ffffff; text-decoration: none; display: inline-block; font-weight: bold;">
                   Click here to log in
                 </a>
               </td>
@@ -176,11 +176,14 @@ class EmailService {
   }
 
   static async sendPasswordResetEmail(email, resetToken) {
-    const frontendUrl = process.env.FRONTEND_URL || 'https://nausurology.org';
-    const resetUrl = `${frontendUrl}/reset-password/${resetToken}`;
+    const rawFrontendUrl = process.env.FRONTEND_URL || 'https://nausurology.org';
+    const frontendUrl = rawFrontendUrl.startsWith('http') ? rawFrontendUrl : `https://${rawFrontendUrl}`;
+    
+    const safeToken = encodeURIComponent(resetToken);
+    const resetUrl = `${frontendUrl}/reset-password/${safeToken}`;
 
     const html = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333333;">
         <h2 style="color: #2c3e50; border-bottom: 2px solid #007bff; padding-bottom: 10px;">
           Password Reset Request
         </h2>
@@ -189,10 +192,10 @@ class EmailService {
         <p>Click the button below to reset your password:</p>
         
         <div style="margin: 30px 0; text-align: center;">
-          <table border="0" cellspacing="0" cellpadding="0" style="margin: 0 auto;">
+          <table border="0" cellspacing="0" cellpadding="0" align="center" style="margin: 0 auto;">
             <tr>
-              <td align="center" bgcolor="#007bff" style="border-radius: 5px;">
-                <a href="${resetUrl}" target="_blank" style="font-size: 16px; font-family: Helvetica, Arial, sans-serif; color: #ffffff; text-decoration: none; padding: 12px 30px; border-radius: 5px; border: 1px solid #007bff; display: inline-block; font-weight: bold;">
+              <td align="center" bgcolor="#007bff" style="border-radius: 5px; padding: 14px 28px;">
+                <a href="${resetUrl}" target="_blank" rel="noopener noreferrer" style="font-size: 16px; font-family: Helvetica, Arial, sans-serif; color: #ffffff; text-decoration: none; display: block; font-weight: bold;">
                   Reset Password
                 </a>
               </td>
@@ -200,16 +203,16 @@ class EmailService {
           </table>
         </div>
 
-        <p style="color: #666; font-size: 14px;">
+        <p style="color: #666666; font-size: 14px;">
           This link will expire in 1 hour for security reasons.
         </p>
-        <p style="color: #666; font-size: 14px;">
+        <p style="color: #666666; font-size: 14px;">
           If you did not request a password reset, please ignore this email. Your password will remain unchanged.
         </p>
-        <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
-        <p style="color: #999; font-size: 12px;">
-          If the button doesn't work, copy and paste this link into your browser:<br>
-          <a href="${resetUrl}" style="color: #007bff;">${resetUrl}</a>
+        <hr style="border: none; border-top: 1px solid #eeeeee; margin: 30px 0;">
+        <p style="color: #777777; font-size: 13px; line-height: 1.5;">
+          If the button above is not clickable in your email reader, copy and paste this link into your browser address bar:<br>
+          <a href="${resetUrl}" style="color: #007bff; word-break: break-all;">${resetUrl}</a>
         </p>
         <br>
         <p>Best regards,<br>
@@ -237,7 +240,8 @@ class EmailService {
   }
 
   static async sendAdminWelcomeEmail(email, name, role, tempPassword) {
-    const adminUrl = process.env.ADMIN_URL || 'https://admin.nausurology.org';
+    const rawAdminUrl = process.env.ADMIN_URL || 'https://admin.nausurology.org';
+    const adminUrl = rawAdminUrl.startsWith('http') ? rawAdminUrl : `https://${rawAdminUrl}`;
     const contactEmail = process.env.CONTACT_EMAIL || 'urologistsinnigeria@gmail.com';
 
     const roleDisplay = {
@@ -268,8 +272,8 @@ class EmailService {
         <div style="margin: 30px 0; text-align: center;">
           <table border="0" cellspacing="0" cellpadding="0" style="margin: 0 auto;">
             <tr>
-              <td align="center" bgcolor="#007bff" style="border-radius: 5px;">
-                <a href="${adminUrl}/login" target="_blank" style="font-size: 16px; font-family: Helvetica, Arial, sans-serif; color: #ffffff; text-decoration: none; padding: 12px 30px; border-radius: 5px; border: 1px solid #007bff; display: inline-block; font-weight: bold;">
+              <td align="center" bgcolor="#007bff" style="border-radius: 5px; padding: 12px 30px;">
+                <a href="${adminUrl}/login" target="_blank" style="font-size: 16px; font-family: Helvetica, Arial, sans-serif; color: #ffffff; text-decoration: none; display: inline-block; font-weight: bold;">
                   Login to Admin Panel
                 </a>
               </td>
@@ -300,7 +304,8 @@ class EmailService {
   }
 
   static async sendAdminAccountUpdatedEmail(email, name, changes) {
-    const adminUrl = process.env.ADMIN_URL || 'https://admin.nausurology.org';
+    const rawAdminUrl = process.env.ADMIN_URL || 'https://admin.nausurology.org';
+    const adminUrl = rawAdminUrl.startsWith('http') ? rawAdminUrl : `https://${rawAdminUrl}`;
     const contactEmail = process.env.CONTACT_EMAIL || 'urologistsinnigeria@gmail.com';
 
     const changesList = changes.map(c => `<li><strong>${c.field}:</strong> ${c.detail}</li>`).join('');
@@ -321,8 +326,8 @@ class EmailService {
         <div style="margin: 30px 0; text-align: center;">
           <table border="0" cellspacing="0" cellpadding="0" style="margin: 0 auto;">
             <tr>
-              <td align="center" bgcolor="#007bff" style="border-radius: 5px;">
-                <a href="${adminUrl}/login" target="_blank" style="font-size: 16px; font-family: Helvetica, Arial, sans-serif; color: #ffffff; text-decoration: none; padding: 12px 30px; border-radius: 5px; border: 1px solid #007bff; display: inline-block; font-weight: bold;">
+              <td align="center" bgcolor="#007bff" style="border-radius: 5px; padding: 12px 30px;">
+                <a href="${adminUrl}/login" target="_blank" style="font-size: 16px; font-family: Helvetica, Arial, sans-serif; color: #ffffff; text-decoration: none; display: inline-block; font-weight: bold;">
                   Login to Admin Panel
                 </a>
               </td>
@@ -345,7 +350,8 @@ class EmailService {
   }
 
   static async sendAdminPasswordChangedByAdminEmail(email, name, newPassword) {
-    const adminUrl = process.env.ADMIN_URL || 'https://admin.nausurology.org';
+    const rawAdminUrl = process.env.ADMIN_URL || 'https://admin.nausurology.org';
+    const adminUrl = rawAdminUrl.startsWith('http') ? rawAdminUrl : `https://${rawAdminUrl}`;
     const contactEmail = process.env.CONTACT_EMAIL || 'urologistsinnigeria@gmail.com';
 
     const html = `
@@ -369,8 +375,8 @@ class EmailService {
         <div style="margin: 30px 0; text-align: center;">
           <table border="0" cellspacing="0" cellpadding="0" style="margin: 0 auto;">
             <tr>
-              <td align="center" bgcolor="#007bff" style="border-radius: 5px;">
-                <a href="${adminUrl}/login" target="_blank" style="font-size: 16px; font-family: Helvetica, Arial, sans-serif; color: #ffffff; text-decoration: none; padding: 12px 30px; border-radius: 5px; border: 1px solid #007bff; display: inline-block; font-weight: bold;">
+              <td align="center" bgcolor="#007bff" style="border-radius: 5px; padding: 12px 30px;">
+                <a href="${adminUrl}/login" target="_blank" style="font-size: 16px; font-family: Helvetica, Arial, sans-serif; color: #ffffff; text-decoration: none; display: inline-block; font-weight: bold;">
                   Login to Admin Panel
                 </a>
               </td>
@@ -393,8 +399,11 @@ class EmailService {
   }
 
   static async sendAdminPasswordResetEmail(email, resetToken) {
-    const adminUrl = process.env.ADMIN_URL || 'https://admin.nausurology.org';
-    const resetUrl = `${adminUrl}/reset-password/${resetToken}`;
+    const rawAdminUrl = process.env.ADMIN_URL || 'https://admin.nausurology.org';
+    const adminUrl = rawAdminUrl.startsWith('http') ? rawAdminUrl : `https://${rawAdminUrl}`;
+    
+    const safeToken = encodeURIComponent(resetToken);
+    const resetUrl = `${adminUrl}/reset-password/${safeToken}`;
 
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -408,8 +417,8 @@ class EmailService {
         <div style="margin: 30px 0; text-align: center;">
           <table border="0" cellspacing="0" cellpadding="0" style="margin: 0 auto;">
             <tr>
-              <td align="center" bgcolor="#007bff" style="border-radius: 5px;">
-                <a href="${resetUrl}" target="_blank" style="font-size: 16px; font-family: Helvetica, Arial, sans-serif; color: #ffffff; text-decoration: none; padding: 12px 30px; border-radius: 5px; border: 1px solid #007bff; display: inline-block; font-weight: bold;">
+              <td align="center" bgcolor="#007bff" style="border-radius: 5px; padding: 14px 28px;">
+                <a href="${resetUrl}" target="_blank" rel="noopener noreferrer" style="font-size: 16px; font-family: Helvetica, Arial, sans-serif; color: #ffffff; text-decoration: none; display: block; font-weight: bold;">
                   Reset Password
                 </a>
               </td>
@@ -426,7 +435,7 @@ class EmailService {
         <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
         <p style="color: #999; font-size: 12px;">
           If the button doesn't work, copy and paste this link into your browser:<br>
-          <a href="${resetUrl}" style="color: #007bff;">${resetUrl}</a>
+          <a href="${resetUrl}" style="color: #007bff; word-break: break-all;">${resetUrl}</a>
         </p>
         <br>
         <p>Best regards,<br>
