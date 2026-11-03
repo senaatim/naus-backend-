@@ -43,7 +43,7 @@ async function importMembers() {
     console.log('✅ Connected to Supabase PostgreSQL successfully!\n');
 
     // Load the Excel workbook
-    const workbook = XLSX.readFile('members.xlsx'); 
+    const workbook = XLSX.readFile('hod-members.xlsx'); 
     const sheetName = workbook.SheetNames[0];
     const sheet = workbook.Sheets[sheetName];
 

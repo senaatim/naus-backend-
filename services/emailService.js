@@ -60,9 +60,15 @@ class EmailService {
         </p>
 
         <div style="margin: 30px 0; text-align: center;">
-          <a href="${frontendUrl}/member-login" style="background-color: #28a745; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">
-            Login to Your Account
-          </a>
+          <table border="0" cellspacing="0" cellpadding="0" style="margin: 0 auto;">
+            <tr>
+              <td align="center" bgcolor="#28a745" style="border-radius: 5px;">
+                <a href="${frontendUrl}/member-login" target="_blank" style="font-size: 16px; font-family: Helvetica, Arial, sans-serif; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 5px; border: 1px solid #28a745; display: inline-block; font-weight: bold;">
+                  Login to Your Account
+                </a>
+              </td>
+            </tr>
+          </table>
         </div>
 
         <p>After logging in, please complete your profile by adding:</p>
@@ -98,9 +104,17 @@ class EmailService {
 
         <p>Please use this information to log in to your account and <strong>change your password immediately</strong>.</p>
 
-        <p style="margin: 30px 0; text-align: center;">
-          <a href="${loginUrl}/member-login" style="background-color: #007bff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">Click here to log in</a>
-        </p>
+        <div style="margin: 30px 0; text-align: center;">
+          <table border="0" cellspacing="0" cellpadding="0" style="margin: 0 auto;">
+            <tr>
+              <td align="center" bgcolor="#007bff" style="border-radius: 5px;">
+                <a href="${loginUrl}/member-login" target="_blank" style="font-size: 16px; font-family: Helvetica, Arial, sans-serif; color: #ffffff; text-decoration: none; padding: 12px 30px; border-radius: 5px; border: 1px solid #007bff; display: inline-block; font-weight: bold;">
+                  Click here to log in
+                </a>
+              </td>
+            </tr>
+          </table>
+        </div>
 
         <p style="color: #666; font-style: italic;">Welcome to the Nigerian Association of Urological Surgeons!</p>
         <br>
@@ -173,11 +187,19 @@ class EmailService {
         <p>Hello,</p>
         <p>We received a request to reset your password for your NAUS member account.</p>
         <p>Click the button below to reset your password:</p>
+        
         <div style="margin: 30px 0; text-align: center;">
-          <a href="${resetUrl}" style="background-color: #007bff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">
-            Reset Password
-          </a>
+          <table border="0" cellspacing="0" cellpadding="0" style="margin: 0 auto;">
+            <tr>
+              <td align="center" bgcolor="#007bff" style="border-radius: 5px;">
+                <a href="${resetUrl}" target="_blank" style="font-size: 16px; font-family: Helvetica, Arial, sans-serif; color: #ffffff; text-decoration: none; padding: 12px 30px; border-radius: 5px; border: 1px solid #007bff; display: inline-block; font-weight: bold;">
+                  Reset Password
+                </a>
+              </td>
+            </tr>
+          </table>
         </div>
+
         <p style="color: #666; font-size: 14px;">
           This link will expire in 1 hour for security reasons.
         </p>
@@ -244,9 +266,15 @@ class EmailService {
         </p>
 
         <div style="margin: 30px 0; text-align: center;">
-          <a href="${adminUrl}/login" style="background-color: #007bff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">
-            Login to Admin Panel
-          </a>
+          <table border="0" cellspacing="0" cellpadding="0" style="margin: 0 auto;">
+            <tr>
+              <td align="center" bgcolor="#007bff" style="border-radius: 5px;">
+                <a href="${adminUrl}/login" target="_blank" style="font-size: 16px; font-family: Helvetica, Arial, sans-serif; color: #ffffff; text-decoration: none; padding: 12px 30px; border-radius: 5px; border: 1px solid #007bff; display: inline-block; font-weight: bold;">
+                  Login to Admin Panel
+                </a>
+              </td>
+            </tr>
+          </table>
         </div>
 
         <p>As an administrator, you will have access to:</p>
@@ -270,6 +298,7 @@ class EmailService {
 
     return await this.sendEmail(email, 'NAUS Admin Account Created - Your Login Credentials', html);
   }
+
   static async sendAdminAccountUpdatedEmail(email, name, changes) {
     const adminUrl = process.env.ADMIN_URL || 'https://admin.nausurology.org';
     const contactEmail = process.env.CONTACT_EMAIL || 'urologistsinnigeria@gmail.com';
@@ -290,9 +319,15 @@ class EmailService {
         </div>
 
         <div style="margin: 30px 0; text-align: center;">
-          <a href="${adminUrl}/login" style="background-color: #007bff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">
-            Login to Admin Panel
-          </a>
+          <table border="0" cellspacing="0" cellpadding="0" style="margin: 0 auto;">
+            <tr>
+              <td align="center" bgcolor="#007bff" style="border-radius: 5px;">
+                <a href="${adminUrl}/login" target="_blank" style="font-size: 16px; font-family: Helvetica, Arial, sans-serif; color: #ffffff; text-decoration: none; padding: 12px 30px; border-radius: 5px; border: 1px solid #007bff; display: inline-block; font-weight: bold;">
+                  Login to Admin Panel
+                </a>
+              </td>
+            </tr>
+          </table>
         </div>
 
         <p>If you did not expect these changes, please contact us immediately at <a href="mailto:${contactEmail}">${contactEmail}</a>.</p>
@@ -332,9 +367,15 @@ class EmailService {
         </p>
 
         <div style="margin: 30px 0; text-align: center;">
-          <a href="${adminUrl}/login" style="background-color: #007bff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">
-            Login to Admin Panel
-          </a>
+          <table border="0" cellspacing="0" cellpadding="0" style="margin: 0 auto;">
+            <tr>
+              <td align="center" bgcolor="#007bff" style="border-radius: 5px;">
+                <a href="${adminUrl}/login" target="_blank" style="font-size: 16px; font-family: Helvetica, Arial, sans-serif; color: #ffffff; text-decoration: none; padding: 12px 30px; border-radius: 5px; border: 1px solid #007bff; display: inline-block; font-weight: bold;">
+                  Login to Admin Panel
+                </a>
+              </td>
+            </tr>
+          </table>
         </div>
 
         <p>If you did not expect this change, please contact us immediately at <a href="mailto:${contactEmail}">${contactEmail}</a>.</p>
@@ -363,11 +404,19 @@ class EmailService {
         <p>Hello,</p>
         <p>We received a request to reset your password for your NAUS admin account.</p>
         <p>Click the button below to reset your password:</p>
+        
         <div style="margin: 30px 0; text-align: center;">
-          <a href="${resetUrl}" style="background-color: #007bff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">
-            Reset Password
-          </a>
+          <table border="0" cellspacing="0" cellpadding="0" style="margin: 0 auto;">
+            <tr>
+              <td align="center" bgcolor="#007bff" style="border-radius: 5px;">
+                <a href="${resetUrl}" target="_blank" style="font-size: 16px; font-family: Helvetica, Arial, sans-serif; color: #ffffff; text-decoration: none; padding: 12px 30px; border-radius: 5px; border: 1px solid #007bff; display: inline-block; font-weight: bold;">
+                  Reset Password
+                </a>
+              </td>
+            </tr>
+          </table>
         </div>
+
         <p style="color: #666; font-size: 14px;">
           This link will expire in 1 hour for security reasons.
         </p>
